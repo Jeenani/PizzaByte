@@ -1,0 +1,41 @@
+# --- Godot 4+ ---
+# Папка кэша и импортированных данных (генерируется автоматически)
+.godot/
+
+# Игнорировать файлы импортированных переводов (бинарные, генерируются из CSV)
+*.translation
+
+# --- Godot 3.x / 4.0 (на случай, если у вас старые ассеты) ---
+# .import/
+# export.cfg
+# export_credentials.cfg
+
+# --- Специфичные для C# / Mono (если используете) ---
+.mono/
+data_*/
+mono_crash.*.json
+
+# --- Системные файлы ОС ---
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# --- Временные файлы редакторов / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
