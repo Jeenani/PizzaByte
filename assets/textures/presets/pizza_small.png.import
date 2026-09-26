@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bx6knfkicrmd"
-path="res://.godot/imported/machie_body.png-56348552fbabf8971bf04c5b5c7b0261.ctex"
+uid="uid://b2oaqpymyo8th"
+path="res://.godot/imported/pizza_small.png-0bbd4448cdb1b4059da4b4643a9e05e2.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/machine/machie_body.png"
-dest_files=["res://.godot/imported/machie_body.png-56348552fbabf8971bf04c5b5c7b0261.ctex"]
+source_file="res://assets/textures/presets/pizza_small.png"
+dest_files=["res://.godot/imported/pizza_small.png-0bbd4448cdb1b4059da4b4643a9e05e2.ctex"]
 
 [params]
 

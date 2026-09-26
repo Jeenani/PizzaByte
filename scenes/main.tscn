@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://d2edli0rbnpn7" path="res://scripts/managers/machine_controller.gd" id="2_tbgi4"]
 [ext_resource type="Script" uid="uid://vwrb774d2cst" path="res://scripts/managers/order_manager.gd" id="3_tefeu"]
 [ext_resource type="Script" uid="uid://ckwnavhpjpdlf" path="res://scripts/managers/queue_manager.gd" id="4_o6xl0"]
-[ext_resource type="Texture2D" uid="uid://bx6knfkicrmd" path="res://assets/textures/machine/machie_body.png" id="5_tbgi4"]
+[ext_resource type="Texture2D" uid="uid://dllt5jyb1w82m" path="res://assets/textures/machine/whole_body.png" id="5_tbgi4"]
 
 [node name="Main" type="Control" unique_id=1602984134]
 layout_mode = 3
@@ -65,6 +65,24 @@ layout_mode = 2
 layout_mode = 2
 text = "ДАЛЕЕ →"
 
+[node name="DispenseZone" type="Control" parent="MachineBody" unique_id=39495259]
+anchors_preset = 0
+
+[node name="DispenseInterior" type="TextureRect" parent="MachineBody/DispenseZone" unique_id=825996349]
+layout_mode = 0
+
+[node name="PizzaBox" type="TextureRect" parent="MachineBody/DispenseZone" unique_id=2004455263]
+layout_mode = 0
+
+[node name="BottomBar" type="Control" parent="MachineBody" unique_id=298915206]
+anchors_preset = 0
+
+[node name="InfoIcons" type="HBoxContainer" parent="MachineBody/BottomBar" unique_id=274779088]
+layout_mode = 0
+
+[node name="RobotChat" type="HBoxContainer" parent="MachineBody/BottomBar" unique_id=1298264234]
+layout_mode = 0
+
 [node name="IngredientsZone" type="Control" parent="MachineBody" unique_id=161227768]
 anchors_preset = 0
 
@@ -94,21 +112,3 @@ layout_mode = 2
 [node name="PayButton" type="Button" parent="MachineBody/IngredientsZone/PaymentContent" unique_id=387137850]
 layout_mode = 2
 text = "💰 Оплатить"
-
-[node name="DispenseZone" type="Control" parent="MachineBody" unique_id=39495259]
-anchors_preset = 0
-
-[node name="DispenseInterior" type="TextureRect" parent="MachineBody/DispenseZone" unique_id=825996349]
-layout_mode = 0
-
-[node name="PizzaBox" type="TextureRect" parent="MachineBody/DispenseZone" unique_id=2004455263]
-layout_mode = 0
-
-[node name="BottomBar" type="Control" parent="MachineBody" unique_id=298915206]
-anchors_preset = 0
-
-[node name="InfoIcons" type="HBoxContainer" parent="MachineBody/BottomBar" unique_id=274779088]
-layout_mode = 0
-
-[node name="RobotChat" type="HBoxContainer" parent="MachineBody/BottomBar" unique_id=1298264234]
-layout_mode = 0
