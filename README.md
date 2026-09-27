@@ -148,3 +148,36 @@ presets×8 (стрелки, размеры, тесто), ui×10 (кнопки se
 6. `sprite_layout.json` — авточтение при старте
 7. Переходы: `machine.transition_to(MachineController.State.XXX)`
 8. Не трогать `addons/` — Godot AI plugin
+
+## fix
+__Всё работает!__ Теперь на скриншоте SELECT_PARAMETERS видны ВСЕ спрайт-текстуры:
+
+✅ Карусель пиццы: рамка, стрелки ← →, изображение пепперони, "Пепперони", "12.90$" ✅ Секция размер: 3 кнопки с иконками (маленькая/средняя/большая), средняя подсвечена ✅ Секция тесто: 3 кнопки с иконками (классич./тонкое/пышное), классическое подсвечено ✅ Кнопка "ДАЛЕЕ →" с жёлтой текстурой
+
+__Причина бага__: `z_index = -1` на Sprite2D внутри ClickableSprite. Godot суммирует z_index по всей цепочке родителей (z_as_relative = true): спрайт получал effective z = -1, а whole_body.png рисовался на z = 0, поэтому спрайты уходили ЗА каркас автомата. Фикс — убрать отрицательный z_index, вместо этого полагаться на порядок дочерних нод (Spr создаётся первым → рисуется под иконками/лейблами автоматически).
+
+Все файлы корректные:
+
+clickable_sprite.gd: 6 функций, signal "clicked", _input с ручным хит-тестом
+screen_panel.gd: 15 функций, 6 сигналов (next_pressed, mode_changed, preset_changed, size_changed, dough_changed, height_changed)
+main.gd: 17 функций включая _toggle_designer, _on_height_changed
+Итог — что было починено
+Главная проблема: клики не проходили к кнопкам
+Причина: Area2D.input_event внутри Node2D, вложенного в Control (TextureRect → Control → Node2D → Area2D), не работает в Godot 4 — viewport physics picking не учитывает Control-иерархию. Плюс Control-ноды (MachineBody TextureRect, ScreenZone) имели mouse_filter = STOP по умолчанию и перехватывали GUI input.
+
+Решение (2 части):
+
+mouse_filter = IGNORE на все Control-ноды (body, screen_zone, oven_zone, etc.) — чтоб не перехватывали GUI events
+Заменён Area2D.input_event на _input() с ручным хит-тестом — ClickableSprite теперь использует _input(event) → проверяет Rect2(global_position, btn_size * global_scale).has_point(event.global_position) → set_input_as_handled(). Это работает надёжно внутри Control иерархии.
+Что кликабельно:
+Элемент	Текстуры selected/unselected	Механизм
+РУЧНОЙ / АВТО режим	manual_mode_selected↔unselected, auto_mode_selected↔unselected	SelectorGroup
+Стрелки ← → (карусель пиццы)	arrow_left, arrow_right	ClickableSprite.clicked
+Размер (3 кнопки)	versatile_square_selected↔unselected	SelectorGroup
+Тесто (3 кнопки)	tall_square_selected↔unselected	SelectorGroup
+Высота (2 кнопки)	versatile_square_selected↔unselected	SelectorGroup
+ДАЛЕЕ →	button_selected	ClickableSprite.clicked
+F1 дебаг-дизайнер
+Восстановлен: F1 → _toggle_designer() → Designer.new().setup(self, body, BODY_W, BODY_H) → toggle(). Позиции элементов загружаются из sprite_layout.json — они не сломались, просто после resize экрана могут выглядеть смещёнными до F3 reset.
+
+
