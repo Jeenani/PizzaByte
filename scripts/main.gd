@@ -172,19 +172,15 @@ func _on_next_pressed() -> void:
 	match machine.current_state:
 		MachineController.State.IDLE:
 			order_mgr.create_new_order()
-			machine.transition_to(MachineController.State.SELECT_MODE)
-		MachineController.State.SELECT_MODE:
-			machine.transition_to(MachineController.State.SELECT_PARAMETERS)
+			# Сразу на панель параметров (ручной режим по умолчанию)
+			machine.force_transition(MachineController.State.SELECT_PARAMETERS)
 		MachineController.State.SELECT_PARAMETERS:
-			machine.transition_to(MachineController.State.BUILDING_COMPOSITION)
-		MachineController.State.BUILDING_COMPOSITION:
-			machine.transition_to(MachineController.State.PROMO_CODE)
-		MachineController.State.PROMO_CODE:
-			machine.transition_to(MachineController.State.PAYMENT)
+			# После выбора параметров — сразу оплата
+			machine.force_transition(MachineController.State.PAYMENT)
 		MachineController.State.PAYMENT:
-			machine.transition_to(MachineController.State.QUEUE)
+			machine.force_transition(MachineController.State.QUEUE)
 		MachineController.State.FINISH:
-			machine.transition_to(MachineController.State.IDLE)
+			machine.force_transition(MachineController.State.IDLE)
 
 
 # ═══ FSM ═══

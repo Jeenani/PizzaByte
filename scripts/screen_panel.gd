@@ -249,41 +249,45 @@ func _chg_preset(d: int) -> void:
 func set_title(t: String) -> void: _tl.text = t
 func set_next_text(t: String) -> void: _nl.text = t
 
+
+## Плавное появление секций (Tween fade-in)
+func _anim_show(nodes: Array, delay_step := 0.06) -> void:
+	for i in nodes.size():
+		var n: CanvasItem = nodes[i]
+		n.visible = true
+		n.modulate.a = 0.0
+		var tw := create_tween()
+		tw.tween_property(n, "modulate:a", 1.0, 0.2).set_delay(i * delay_step).set_ease(Tween.EASE_OUT)
+
+
 func show_state(st: int) -> void:
-	_tl.visible = false
+	# Скрыть всё
+	_tl.visible = false; _tl.modulate.a = 1.0
 	sec_mode.visible = false; sec_pizza.visible = false
 	sec_size.visible = false; sec_dough.visible = false
-	sec_height.visible = false; sec_next.visible = true
+	sec_height.visible = false; sec_next.visible = false
 	match st:
-		0:
+		0:  # IDLE
 			_tl.visible = true
-			set_title("НАЧАТЬ ЗАКАЗ"); set_next_text("НАЧАТЬ →")
-		1:
+			set_title("НАЧАТЬ ЗАКАЗ")
+			sec_next.visible = true; set_next_text("НАЧАТЬ →")
+		2:  # SELECT_PARAMETERS — полная панель
+			_anim_show([sec_mode, sec_pizza, sec_size, sec_dough, sec_height])
+			sec_next.visible = true; set_next_text("ДАЛЕЕ →")
+		5:  # PAYMENT (оплата — пока заглушка для будущих кнопок)
 			_tl.visible = true
-			set_title("ВЫБОР РЕЖИМА"); sec_mode.visible = true
-			set_next_text("ДАЛЕЕ →")
-		2:
-			sec_mode.visible = true; sec_pizza.visible = true
-			sec_size.visible = true; sec_dough.visible = true
-			sec_height.visible = true; set_next_text("ДАЛЕЕ →")
-		3:
+			set_title("ОПЛАТА")
+			sec_next.visible = true; set_next_text("ОПЛАТИТЬ")
+		6:  # QUEUE
 			_tl.visible = true
-			set_title("СОСТАВ"); sec_pizza.visible = true; set_next_text("ДАЛЕЕ →")
-		4:
-			_tl.visible = true
-			set_title("ПРОМОКОД"); set_next_text("К ОПЛАТЕ →")
-		5:
-			_tl.visible = true
-			set_title("ОПЛАТА"); set_next_text("ОПЛАТИТЬ")
-		6:
-			_tl.visible = true
-			set_title("В ОЧЕРЕДИ"); set_next_text("НОВЫЙ")
-		7:
+			set_title("В ОЧЕРЕДИ"); sec_next.visible = false
+		7:  # COOKING
 			_tl.visible = true
 			set_title("ГОТОВИМ..."); sec_next.visible = false
-		8:
+		8:  # DISPENSING
 			_tl.visible = true
 			set_title("ВЫДАЧА"); sec_next.visible = false
-		9:
+		9:  # FINISH
 			_tl.visible = true
-			set_title("ГОТОВО!"); set_next_text("НОВЫЙ")
+			set_title("ГОТОВО!")
+			sec_next.visible = true; set_next_text("НОВЫЙ ЗАКАЗ")

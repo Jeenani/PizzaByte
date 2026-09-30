@@ -1034,11 +1034,14 @@ func _load_v2(d: Dictionary) -> void:
 			# Ищем по path (спрайты) или node (зоны) или создаём новые
 			var found_id := _find_element_by_save(saved)
 			if found_id == "":
-				# Тексты и группы — создать заново
-				if saved.get("type", -1) == EType.TEXT:
+				# Пересоздать элементы, которых нет в _elements
+				var st: int = saved.get("type", -1)
+				if st == EType.TEXT:
 					found_id = add_text(saved.get("text", ""), Vector2(saved.get("x", 0), saved.get("y", 0)), saved.get("font_size", 24), Color.html(saved.get("font_color", "#ffffff")))
-				elif saved.get("type", -1) == EType.GROUP:
+				elif st == EType.GROUP:
 					found_id = add_group(saved.get("name", "Group"), Vector2(saved.get("x", 0), saved.get("y", 0)), Vector2(saved.get("w", 200), saved.get("h", 200)))
+				elif st == EType.ZONE:
+					found_id = add_zone(saved.get("name", "Zone"), Rect2(saved.get("x", 0), saved.get("y", 0), saved.get("w", 100), saved.get("h", 100)), Color.html(saved.get("color", "ffffff33")), saved.get("node", ""))
 				if found_id == "":
 					continue
 			id = found_id
