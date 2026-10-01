@@ -67,6 +67,8 @@ var _hg: SelectorGroup
 var _bn: ClickableSprite
 var _nl: Label
 var _tl: Label
+var _lbl_manual: Label
+var _lbl_auto: Label
 
 var _pdata: Array = []
 var _slbl: Array = []
@@ -115,9 +117,22 @@ func _build_mode() -> void:
 	_mg = SelectorGroup.new(); _mg.name = "ModeGrp"; sec_mode.add_child(_mg)
 	var bm := ClickableSprite.make(_t.get("m_un"), _t.get("m_sel"), Vector2(mw, 55), Vector2(PAD, 8))
 	_mg.add_opt(bm)
+	_lbl_manual = _lbl("Ручной", 13, Color.WHITE, Vector2(46, 0), Vector2(mw - 50, 55))
+	_lbl_manual.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_lbl_manual.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_lbl_manual.z_index = 1
+	bm.add_child(_lbl_manual)
+
 	var ba := ClickableSprite.make(_t.get("a_un"), _t.get("a_sel"), Vector2(mw, 55), Vector2(PAD + mw + 8, 8))
 	_mg.add_opt(ba)
+	_lbl_auto = _lbl("Автоматический", 12, Color.WHITE, Vector2(46, 0), Vector2(mw - 50, 55))
+	_lbl_auto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_lbl_auto.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_lbl_auto.z_index = 1
+	ba.add_child(_lbl_auto)
+
 	_mg.select_quiet(0)
+	_update_mode_labels(0)
 	_mg.option_selected.connect(_on_mode_sel)
 
 
@@ -235,7 +250,15 @@ func _lbl(text: String, fs: int, c: Color, pos: Vector2, sz: Vector2) -> Label:
 
 func _on_mode_sel(i: int) -> void:
 	_mode = "manual" if i == 0 else "auto"
+	_update_mode_labels(i)
 	mode_changed.emit(_mode)
+
+
+func _update_mode_labels(sel_idx: int) -> void:
+	if _lbl_manual:
+		_lbl_manual.add_theme_color_override("font_color", Color.WHITE if sel_idx == 0 else Color(0.65, 0.72, 0.8))
+	if _lbl_auto:
+		_lbl_auto.add_theme_color_override("font_color", Color.WHITE if sel_idx == 1 else Color(0.65, 0.72, 0.8))
 
 func _chg_preset(d: int) -> void:
 	_pi = wrapi(_pi + d, 0, _pdata.size())
@@ -283,11 +306,15 @@ func show_state(st: int) -> void:
 			set_title("В ОЧЕРЕДИ"); sec_next.visible = false
 		7:  # COOKING
 			_tl.visible = true
-			set_title("ГОТОВИМ..."); sec_next.visible = false
+			set_title("ГОТОВИМ...")
+			sec_next.visible = true
+			set_next_text("СКИП >>")
 		8:  # DISPENSING
 			_tl.visible = true
-			set_title("ВЫДАЧА"); sec_next.visible = false
+			set_title("ВЫДАЧА...")
+			sec_next.visible = false
 		9:  # FINISH
 			_tl.visible = true
-			set_title("ГОТОВО!")
-			sec_next.visible = true; set_next_text("НОВЫЙ ЗАКАЗ")
+			set_title("ГОТОВО! ЗАБЕРИТЕ")
+			sec_next.visible = true
+			set_next_text("НОВЫЙ ЗАКАЗ →")

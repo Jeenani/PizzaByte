@@ -7,6 +7,7 @@
 [ext_resource type="Texture2D" uid="uid://dllt5jyb1w82m" path="res://assets/textures/machine/whole_body.png" id="5_tbgi4"]
 [ext_resource type="Texture2D" uid="uid://dn8krt0oi4a1" path="res://assets/textures/machine/camera_pizzing_off.png" id="6_o6xl0"]
 [ext_resource type="Texture2D" uid="uid://ky3pge1ccay8" path="res://assets/textures/machine/pizza_box.png" id="7_tipki"]
+[ext_resource type="Texture2D" uid="uid://cnliwqfdb00f6" path="res://assets/textures/indicator/furnace_indicator0.png" id="8_furnace0"]
 
 [node name="Main" type="Control" unique_id=1602984134]
 layout_mode = 3
@@ -91,6 +92,15 @@ layout_mode = 0
 
 [node name="RobotChat" type="HBoxContainer" parent="MachineBody/BottomBar" unique_id=1298264234]
 layout_mode = 0
+
+[node name="FurnaceZone" type="Control" parent="MachineBody" unique_id=1409283741]
+anchors_preset = 0
+
+[node name="FurnaceIndicator" type="TextureRect" parent="MachineBody/FurnaceZone" unique_id=1409283742]
+layout_mode = 0
+texture = ExtResource("8_furnace0")
+expand_mode = 1
+stretch_mode = 6
 
 [node name="IngredientsZone" type="Control" parent="MachineBody" unique_id=161227768]
 anchors_preset = 0

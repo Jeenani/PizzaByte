@@ -150,16 +150,8 @@ func process_cash_payment(amount: float) -> bool:
 
 ## Рассчитать время приготовления
 func _calculate_cooking_time() -> float:
-	if not current_order:
-		return 5.0
-	# Базовое время + по 0.5 сек за ингредиент + множитель размера
-	var time := 3.0
-	time += current_order.ingredients.size() * 0.5
-	if current_order.pizza_size:
-		time *= current_order.pizza_size.kbju_multiplier
-	if current_order.height_tall:
-		time += 1.0
-	return time
+	# Пользователь запросил 14 секунд на приготовление
+	return 14.0
 
 
 ## Главный пересчёт цены и КБЖУ

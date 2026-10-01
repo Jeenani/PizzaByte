@@ -24,7 +24,7 @@ var total_fat: float = 0.0
 var total_carbs: float = 0.0
 
 # --- Приготовление ---
-var cooking_time: float = 5.0   # Время готовки (сек)
+var cooking_time: float = 14.0   # Время готовки (сек)
 var order_name: String = ""     # Имя в очереди
 
 # --- Оплата наличными ---

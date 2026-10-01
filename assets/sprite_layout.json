@@ -51,17 +51,31 @@
 		},
 		{
 			"id": "e100", "type": 1, "name": "manual_mode_btn",
-			"parent_id": "e2", "children": [],
+			"parent_id": "e2", "children": ["e102"],
 			"path": "res://assets/textures/ui/manual_mode_selected.png",
 			"x": 16.0, "y": 12.0, "w": 196.0, "h": 55.0,
 			"visible": true, "z_index": 0
 		},
 		{
+			"id": "e102", "type": 2, "name": "txt_manual",
+			"parent_id": "e100", "children": [],
+			"text": "Ручной", "font_size": 13, "font_color": "ffffffff",
+			"x": 46.0, "y": 0.0, "w": 146.0, "h": 55.0,
+			"visible": true, "z_index": 1
+		},
+		{
 			"id": "e101", "type": 1, "name": "auto_mode_btn",
-			"parent_id": "e2", "children": [],
+			"parent_id": "e2", "children": ["e103"],
 			"path": "res://assets/textures/ui/auto_mode_unselected.png",
 			"x": 220.0, "y": 12.0, "w": 196.0, "h": 55.0,
 			"visible": true, "z_index": 0
+		},
+		{
+			"id": "e103", "type": 2, "name": "txt_auto",
+			"parent_id": "e101", "children": [],
+			"text": "Автоматический", "font_size": 12, "font_color": "a6b8ccff",
+			"x": 46.0, "y": 0.0, "w": 146.0, "h": 55.0,
+			"visible": true, "z_index": 1
 		},
 		{
 			"id": "e110", "type": 1, "name": "pizza_frame",
