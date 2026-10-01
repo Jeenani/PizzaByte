@@ -35,15 +35,27 @@ var _pan_start := Vector2.ZERO
 @onready var screen_content: VBoxContainer = $MachineBody/ScreenZone/ScreenContent
 @onready var next_button: Button = $MachineBody/ScreenZone/ScreenContent/NextButton
 @onready var pizza_box: TextureRect = $MachineBody/DispenseZone/PizzaBox
+@onready var oven_interior: TextureRect = $MachineBody/OvenZone/OvenInterior
 @onready var ingredients_zone: Control = $MachineBody/IngredientsZone
 
 var _game_data: Node
 var _panel: ScreenPanel
 var _designer: Designer
 
+# ── Текстуры камеры печи ──
+var _cam_off: Texture2D
+var _cam_enabled: Texture2D
+var _cam_cooking: Texture2D
+var _cam_completed: Texture2D
+
 
 func _ready() -> void:
 	_game_data = get_node_or_null("/root/GameData")
+	# Загрузить текстуры камеры печи
+	_cam_off = load("res://assets/textures/machine/camera_pizzing_off.png")
+	_cam_enabled = load("res://assets/textures/machine/camera_pizzing_enabled.png")
+	_cam_cooking = load("res://assets/textures/machine/camera_pizzing_cooking.png")
+	_cam_completed = load("res://assets/textures/machine/camera_pizzing_completed.png")
 	# Скрыть ВЕСЬ старый Godot UI — используем только ScreenPanel
 	ingredients_zone.visible = false
 	screen_content.visible = false
@@ -98,6 +110,12 @@ func _apply_zoom_pan() -> void:
 	_zone(bottom_bar, BAR_RECT)
 	if _panel:
 		_panel.scale = screen_zone.size / Vector2(ScreenPanel.PW, ScreenPanel.PH)
+	# Камера печи заполняет OvenZone
+	oven_interior.position = Vector2.ZERO
+	oven_interior.size = oven_zone.size
+	# Коробка пиццы заполняет DispenseZone
+	pizza_box.position = Vector2.ZERO
+	pizza_box.size = dispense_zone.size
 
 func _zone(z: Control, r: Rect2) -> void:
 	var s := Vector2(body.size.x / BODY_W, body.size.y / BODY_H)
@@ -178,6 +196,7 @@ func _on_next_pressed() -> void:
 			# После выбора параметров — сразу оплата
 			machine.force_transition(MachineController.State.PAYMENT)
 		MachineController.State.PAYMENT:
+			queue_mgr.add_to_queue(order_mgr.current_order)
 			machine.force_transition(MachineController.State.QUEUE)
 		MachineController.State.FINISH:
 			machine.force_transition(MachineController.State.IDLE)
@@ -187,6 +206,7 @@ func _on_next_pressed() -> void:
 
 func _on_state_changed(_o: MachineController.State, ns: MachineController.State) -> void:
 	_panel.show_state(ns)
+	_update_camera(ns)
 	match ns:
 		MachineController.State.DISPENSING:
 			pizza_box.visible = true
@@ -194,10 +214,35 @@ func _on_state_changed(_o: MachineController.State, ns: MachineController.State)
 			pass
 
 
+## Переключение текстуры камеры печи по состоянию автомата
+func _update_camera(state: MachineController.State) -> void:
+	match state:
+		MachineController.State.IDLE:
+			_set_camera(_cam_off)
+			pizza_box.visible = false
+		MachineController.State.SELECT_PARAMETERS, MachineController.State.PAYMENT:
+			_set_camera(_cam_enabled)
+		MachineController.State.QUEUE:
+			_set_camera(_cam_enabled)
+		MachineController.State.COOKING:
+			_set_camera(_cam_cooking)
+		MachineController.State.DISPENSING:
+			_set_camera(_cam_completed)
+			pizza_box.visible = true
+		MachineController.State.FINISH:
+			_set_camera(_cam_completed)
+
+
+func _set_camera(tex: Texture2D) -> void:
+	if oven_interior and tex:
+		oven_interior.texture = tex
+
+
 # ═══ ГОТОВКА ═══
 
 func _on_cook_start(order) -> void:
 	cook_progress.value = 0
+	_set_camera(_cam_cooking)
 	if machine.current_state == MachineController.State.QUEUE:
 		machine.force_transition(MachineController.State.COOKING)
 
@@ -206,6 +251,7 @@ func _on_cook_progress(progress: float, _time_left: float) -> void:
 
 func _on_cook_finish(_order) -> void:
 	cook_progress.value = 100
+	_set_camera(_cam_completed)
 	pizza_box.visible = true
 	if machine.current_state == MachineController.State.COOKING:
 		machine.force_transition(MachineController.State.DISPENSING)
@@ -215,4 +261,5 @@ func _on_dispense_finish(_order) -> void:
 		machine.force_transition(MachineController.State.FINISH)
 	await get_tree().create_timer(3.0).timeout
 	pizza_box.visible = false
+	_set_camera(_cam_off)
 	cook_progress.value = 0
