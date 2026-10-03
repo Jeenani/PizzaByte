@@ -1,27 +1,43 @@
 extends Control
 # ═══════════════════════════════════════════════════════════
 #  🍕 PIZZA MARKET — 2D пиццемат-симулятор
-#  Каркас whole_body.png (1614×1536)
-#  Панель заказа: ScreenPanel (Node2D + ClickableSprite + Area2D)
+#  Каркас whole_body.png (1614×1536) на фоне улицы (2752×1536)
+#  Панель заказа: ScreenPanel (Node2D + ClickableSprite)
+#  Неоновая вывеска: NeonSign (шейдерное мерцание)
+#  Камера: плавный зум от общего фона к автомату по скроллу
 # ═══════════════════════════════════════════════════════════
 
 const BODY_W := 1614.0
 const BODY_H := 1536.0
-const ZOOM_MIN := 0.3
-const ZOOM_MAX := 3.0
-const ZOOM_STEP := 0.1
+
+const BG_W := 2752.0
+const BG_H := 1536.0
+const BG_CENTER := Vector2(1376.0, 768.0)
+
+# Позиционирование автомата на фоне (человеческий размер у стены)
+const MACHINE_POS := Vector2(130.0, 410.0)
+const MACHINE_SCALE := 0.57
+const MACHINE_W := BODY_W * MACHINE_SCALE # 919.98
+const MACHINE_H := BODY_H * MACHINE_SCALE # 875.52
+# Центр автомата в мировых координатах (с легким смещением в сторону сенсорного экрана)
+const MACHINE_CENTER := Vector2(130.0 + MACHINE_W * 0.52, 410.0 + MACHINE_H * 0.48)
 
 const SCREEN_RECT := Rect2(1044, 220, 432, 924)
 const OVEN_RECT := Rect2(100, 270, 820, 660)
 const DISPENSE_RECT := Rect2(220, 1150, 580, 160)
 const BAR_RECT := Rect2(12, 1320, 640, 120)
 const FURNACE_RECT := Rect2(1330, 1348, 124, 100)
+const LOGO_RECT := Rect2(150, 76, 550, 170)
 
-var _zoom := 1.0
-var _pan := Vector2.ZERO
-var _panning := false
-var _pan_start := Vector2.ZERO
+# Управление камерой (зум: 0.0 = общий вид всего фона, 1.0 = фокус на автомате)
+var _zoom_t: float = 0.0
+var _target_zoom_t: float = 0.0
+const ZOOM_STEP := 0.15
 
+@onready var cam: Camera2D = $MainCamera
+@onready var bg: TextureRect = $Background
+@onready var bg_left: TextureRect = get_node_or_null("BackgroundLeft")
+@onready var bg_right: TextureRect = get_node_or_null("BackgroundRight")
 @onready var machine: MachineController = $MachineController
 @onready var order_mgr: Node = $OrderManager
 @onready var queue_mgr: Node = $QueueManager
@@ -43,7 +59,11 @@ var _pan_start := Vector2.ZERO
 
 var _game_data: Node
 var _panel: ScreenPanel
-var _designer: Designer
+var _neon: NeonSign
+var _dispensers: Array[DispenserUnit] = []
+const PizzaCookerScript := preload("res://scripts/components/pizza_cooker.gd")
+var _cooker: Node2D
+
 
 # ── Текстуры камеры печи ──
 var _cam_off: Texture2D
@@ -70,18 +90,20 @@ func _ready() -> void:
 	_furnace_ind1 = load("res://assets/textures/indicator/furnace_indicator1.png")
 	_furnace_ind2 = load("res://assets/textures/indicator/furnace_indicator2.png")
 	_set_furnace_indicator(_furnace_ind0)
-	# Скрыть ВЕСЬ старый Godot UI — используем только ScreenPanel
+
+	# Скрыть старый Godot UI — используем только ScreenPanel
 	ingredients_zone.visible = false
 	screen_content.visible = false
 	next_button.visible = false
 	pizza_box.visible = false
 	pizza_box.mouse_filter = Control.MOUSE_FILTER_STOP
 	pizza_box.gui_input.connect(_on_pizza_box_input)
-	# Скрыть стандартные текстовые ноды в OvenZone
 	cook_status.visible = false
 	cook_timer.visible = false
 	cook_progress.visible = false
-	# Убрать перехват ввода Control-нодами — клики идут к Area2D в ClickableSprite
+
+	# Убрать перехват ввода Control-нодами — клики идут к ClickableSprite
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	screen_zone.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	screen_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -90,10 +112,10 @@ func _ready() -> void:
 	bottom_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	furnace_zone.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	furnace_indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Создать панель на основе ClickableSprite компонентов
-	_panel = ScreenPanel.new()
-	_panel.name = "Panel"
-	screen_zone.add_child(_panel)
+
+	# Первичная настройка геометрии автомата и компонентов
+	_setup_machine_layout()
+
 	# Подключить сигналы панели
 	_panel.next_pressed.connect(_on_next_pressed)
 	_panel.mode_changed.connect(_on_mode_changed)
@@ -101,83 +123,161 @@ func _ready() -> void:
 	_panel.size_changed.connect(_on_size_changed)
 	_panel.dough_changed.connect(_on_dough_changed)
 	_panel.height_changed.connect(_on_height_changed)
+
 	# Подключить FSM
 	machine.state_changed.connect(_on_state_changed)
 	queue_mgr.connect("cooking_started", _on_cook_start)
 	queue_mgr.connect("cooking_progress", _on_cook_progress)
 	queue_mgr.connect("cooking_finished", _on_cook_finish)
 	queue_mgr.connect("dispensing_finished", _on_dispense_finish)
+
 	# Старт
 	machine.force_transition(MachineController.State.IDLE)
 	order_mgr.create_new_order()
 	resized.connect(_on_resized)
-	call_deferred("_on_resized")
+	_update_camera()
 
 
-# ═══ ZOOM / PAN / RESIZE ═══
+func _setup_machine_layout() -> void:
+	# Фоновый спрайт
+	bg.position = Vector2.ZERO
+	bg.size = Vector2(BG_W, BG_H)
+	if bg_left:
+		bg_left.position = Vector2(-BG_W, 0.0)
+		bg_left.size = Vector2(BG_W, BG_H)
+		bg_left.flip_h = true
+		bg_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if bg_right:
+		bg_right.position = Vector2(BG_W, 0.0)
+		bg_right.size = Vector2(BG_W, BG_H)
+		bg_right.flip_h = true
+		bg_right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func _apply_zoom_pan() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	var bh := vp.y * _zoom
-	var bw := bh * (BODY_W / BODY_H)
-	body.position = Vector2((vp.x - bw) / 2.0 + _pan.x, (vp.y - bh) / 2.0 + _pan.y)
-	body.size = Vector2(bw, bh)
-	_zone(oven_zone, OVEN_RECT)
-	_zone(screen_zone, SCREEN_RECT)
-	_zone(dispense_zone, DISPENSE_RECT)
-	_zone(bottom_bar, BAR_RECT)
-	_zone(furnace_zone, FURNACE_RECT)
-	if _panel:
-		_panel.scale = screen_zone.size / Vector2(ScreenPanel.PW, ScreenPanel.PH)
-	# Камера печи заполняет OvenZone
+	# Автомат на фоне
+	body.position = MACHINE_POS
+	body.scale = Vector2(MACHINE_SCALE, MACHINE_SCALE)
+	body.size = Vector2(BODY_W, BODY_H)
+
+	# Зоны внутри автомата
+	oven_zone.position = OVEN_RECT.position
+	oven_zone.size = OVEN_RECT.size
+	oven_zone.clip_contents = true
 	oven_interior.position = Vector2.ZERO
 	oven_interior.size = oven_zone.size
-	# Коробка пиццы заполняет DispenseZone
+
+	screen_zone.position = SCREEN_RECT.position
+	screen_zone.size = SCREEN_RECT.size
+
+	dispense_zone.position = DISPENSE_RECT.position
+	dispense_zone.size = DISPENSE_RECT.size
 	pizza_box.position = Vector2.ZERO
 	pizza_box.size = dispense_zone.size
-	# Индикатор печи заполняет FurnaceZone
+
+	bottom_bar.position = BAR_RECT.position
+	bottom_bar.size = BAR_RECT.size
+
+	furnace_zone.position = FURNACE_RECT.position
+	furnace_zone.size = FURNACE_RECT.size
 	furnace_indicator.position = Vector2.ZERO
 	furnace_indicator.size = furnace_zone.size
 
-func _zone(z: Control, r: Rect2) -> void:
-	var s := Vector2(body.size.x / BODY_W, body.size.y / BODY_H)
-	z.position = r.position * s
-	z.size = r.size * s
+	# Диспенсеры ингредиентов внутри камеры печи (4 штуки под потолочной балкой)
+	const DISPENSER_COUNT := 4
+	const DISP_W := 132.0
+	const DISP_H := 141.0
+	const INNER_LEFT := 88.0
+	const INNER_RIGHT := 732.0
+	const POS_Y := 68.0
+	var disp_spacing := (INNER_RIGHT - INNER_LEFT - DISPENSER_COUNT * DISP_W) / float(DISPENSER_COUNT - 1)
+	for i in range(DISPENSER_COUNT):
+		var d := DispenserUnit.new()
+		d.name = "Dispenser_%d" % i
+		d.z_index = 600
+		var pos_x := INNER_LEFT + i * (DISP_W + disp_spacing)
+		d.setup(Vector2(pos_x, POS_Y), Vector2(DISP_W, DISP_H))
+		oven_zone.add_child(d)
+		_dispensers.append(d)
+
+	# Компонент вращающейся пиццы и физики выпадения ингредиентов
+	_cooker = PizzaCookerScript.new()
+	_cooker.name = "PizzaCooker"
+	_cooker.z_index = 1
+	oven_zone.add_child(_cooker)
+	_cooker.setup_dispensers(_dispensers)
+	_cooker.cooking_layer_started.connect(func(layer_name, _disp_idx):
+		if _panel and machine.current_state == MachineController.State.COOKING:
+			_panel.set_title("СЛОЙ: %s" % layer_name.to_upper())
+	)
+	_cooker.baking_started.connect(func():
+		if _panel and machine.current_state == MachineController.State.COOKING:
+			_panel.set_title("🔥 ЗАПЕКАНИЕ (5 сек)")
+	)
+
+	# Неоновая вывеска на верхней левой плашке
+	_neon = NeonSign.new()
+	_neon.name = "NeonSign"
+	_neon.position = LOGO_RECT.position
+	body.add_child(_neon)
+
+	# Сенсорная панель заказа
+	_panel = ScreenPanel.new()
+	_panel.name = "Panel"
+	screen_zone.add_child(_panel)
+
+
+func _process(delta: float) -> void:
+	# Плавное сглаживание зума камеры
+	if not is_equal_approx(_zoom_t, _target_zoom_t):
+		_zoom_t = lerpf(_zoom_t, _target_zoom_t, 9.0 * delta)
+		if absf(_zoom_t - _target_zoom_t) < 0.001:
+			_zoom_t = _target_zoom_t
+		_update_camera()
+
+	# Анимация индикатора печи во время готовки
+	if machine and machine.current_state == MachineController.State.COOKING:
+		_cook_indicator_time += delta
+		var tick: int = int(_cook_indicator_time * 3.0) % 3
+		match tick:
+			0: _set_furnace_indicator(_furnace_ind0)
+			1: _set_furnace_indicator(_furnace_ind1)
+			2: _set_furnace_indicator(_furnace_ind2)
+
+
+# ═══ ДИНАМИЧЕСКАЯ КАМЕРА / ЗУМ ═══
+
+func _calc_zoom_bounds() -> Vector2:
+	var vp := get_viewport().get_visible_rect().size
+	# Отдаление: весь фон 2752x1536 помещается на экране
+	var z_out := minf(vp.x / BG_W, vp.y / BG_H)
+	# Приближение: автомат занимает ~94% экрана по высоте
+	var z_in := (vp.y * 0.94) / MACHINE_H
+	return Vector2(z_out, z_in)
+
+
+func _update_camera() -> void:
+	if not cam:
+		return
+	var zb := _calc_zoom_bounds()
+	var z := lerpf(zb.x, zb.y, _zoom_t)
+	cam.zoom = Vector2(z, z)
+	cam.position = BG_CENTER.lerp(MACHINE_CENTER, _zoom_t)
+
 
 func _on_resized() -> void:
-	_apply_zoom_pan()
+	_update_camera()
+
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Zoom
-	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-			_zoom = clampf(_zoom + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX); _apply_zoom_pan()
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-			_zoom = clampf(_zoom - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX); _apply_zoom_pan()
-		elif event.button_index == MOUSE_BUTTON_MIDDLE:
-			_panning = event.pressed
-			if _panning:
-				_pan_start = event.position
-	# Pan
-	if event is InputEventMouseMotion and _panning:
-		_pan += event.position - _pan_start
-		_pan_start = event.position
-		_apply_zoom_pan()
-	# F3 reset zoom
+	# Зум колесиком мыши (вперед — к автомату, назад — к общему виду фона)
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_target_zoom_t = clampf(_target_zoom_t + ZOOM_STEP, 0.0, 1.0)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_target_zoom_t = clampf(_target_zoom_t - ZOOM_STEP, 0.0, 1.0)
+
+	# F3 — сброс зума к общему фону
 	if event is InputEventKey and event.pressed and event.keycode == KEY_F3:
-		_zoom = 1.0; _pan = Vector2.ZERO; _apply_zoom_pan()
-	# F1 — дебаг-дизайнер
-	if event is InputEventKey and event.pressed and event.keycode == KEY_F1:
-		_toggle_designer()
-
-
-# ═══ ДИЗАЙНЕР (F1) ═══
-
-func _toggle_designer() -> void:
-	if _designer == null:
-		_designer = Designer.new()
-		_designer.setup(self, body, BODY_W, BODY_H)
-	_designer.toggle()
+		_target_zoom_t = 0.0
 
 
 # ═══ СИГНАЛЫ ПАНЕЛИ ═══
@@ -212,7 +312,11 @@ func _on_next_pressed() -> void:
 	match machine.current_state:
 		MachineController.State.IDLE:
 			order_mgr.create_new_order()
-			# Сразу на панель параметров (ручной режим по умолчанию)
+			if _panel and _game_data:
+				var p_idx: int = _panel.get_selected_pizza_index()
+				if p_idx < _game_data.presets.size():
+					order_mgr.apply_preset(_game_data.presets[p_idx])
+			# Сразу на панель параметров
 			machine.force_transition(MachineController.State.SELECT_PARAMETERS)
 		MachineController.State.SELECT_PARAMETERS:
 			# После выбора параметров — сразу оплата
@@ -221,37 +325,63 @@ func _on_next_pressed() -> void:
 			machine.force_transition(MachineController.State.QUEUE)
 			queue_mgr.add_to_queue(order_mgr.current_order)
 		MachineController.State.COOKING:
-			# Кнопка СКИП — пропустить приготовление
-			queue_mgr.skip_cooking()
+			# Кнопка СКИП: 1-й скип — до запекания, 2-й скип — до выдачи
+			_handle_cooking_skip()
 		MachineController.State.FINISH:
 			_take_pizza()
+
+
+func _handle_cooking_skip() -> void:
+	if not _cooker:
+		queue_mgr.skip_cooking()
+		return
+
+	if not _cooker.is_in_baking_phase():
+		print("[Main] ⏭️ Скип 1/2: Раскладка завершена, переходим к запеканию!")
+		_cooker.skip_to_baking()
+		queue_mgr.skip_to_baking()
+		if _panel:
+			_panel.set_title("🔥 ЗАПЕКАНИЕ")
+	else:
+		print("[Main] ⏭️ Скип 2/2: Запекание завершено, переходим к выдаче!")
+		_cooker.skip_to_finish()
+		queue_mgr.skip_cooking()
 
 
 # ═══ FSM ═══
 
 func _on_state_changed(_o: MachineController.State, ns: MachineController.State) -> void:
 	_panel.show_state(ns)
-	_update_camera(ns)
+	_update_oven_camera(ns)
 
 
-## Переключение текстуры камеры печи по состоянию автомата
-func _update_camera(state: MachineController.State) -> void:
+## Переключение текстуры камеры печи и диспенсеров по состоянию автомата
+func _update_oven_camera(state: MachineController.State) -> void:
 	match state:
 		MachineController.State.IDLE:
 			_set_camera(_cam_off)
 			_set_furnace_indicator(_furnace_ind0)
 			pizza_box.visible = false
+			_set_dispensers_state(DispenserUnit.State.OFF)
 		MachineController.State.SELECT_MODE, MachineController.State.SELECT_PARAMETERS, \
 		MachineController.State.BUILDING_COMPOSITION, MachineController.State.PROMO_CODE, \
 		MachineController.State.PAYMENT, MachineController.State.QUEUE:
 			_set_camera(_cam_enabled)
 			_set_furnace_indicator(_furnace_ind0)
+			_set_dispensers_state(DispenserUnit.State.PREPARED)
 		MachineController.State.COOKING:
 			_set_camera(_cam_cooking)
+			_set_dispensers_state(DispenserUnit.State.DISPENSING)
 		MachineController.State.DISPENSING, MachineController.State.FINISH:
 			_cook_indicator_time = 0.0
 			_set_camera(_cam_completed)
 			_set_furnace_indicator(_furnace_ind0)
+			_set_dispensers_state(DispenserUnit.State.PREPARED)
+
+
+func _set_dispensers_state(st: DispenserUnit.State) -> void:
+	for d in _dispensers:
+		d.set_dispenser_state(st)
 
 
 func _set_camera(tex: Texture2D) -> void:
@@ -264,16 +394,6 @@ func _set_furnace_indicator(tex: Texture2D) -> void:
 		furnace_indicator.texture = tex
 
 
-func _process(delta: float) -> void:
-	if machine and machine.current_state == MachineController.State.COOKING:
-		_cook_indicator_time += delta
-		var tick: int = int(_cook_indicator_time * 3.0) % 3
-		match tick:
-			0: _set_furnace_indicator(_furnace_ind0)
-			1: _set_furnace_indicator(_furnace_ind1)
-			2: _set_furnace_indicator(_furnace_ind2)
-
-
 # ═══ ГОТОВКА И ВЫДАЧА ═══
 
 func _on_cook_start(order) -> void:
@@ -282,17 +402,24 @@ func _on_cook_start(order) -> void:
 	_set_camera(_cam_cooking)
 	_set_furnace_indicator(_furnace_ind0)
 	machine.force_transition(MachineController.State.COOKING)
+	if _cooker:
+		_cooker.start_cooking(order)
 	print("[Game] Начало готовки: %s" % order)
 
 func _on_cook_progress(progress: float, time_left: float) -> void:
 	cook_progress.value = progress * 100.0
 	if machine.current_state == MachineController.State.COOKING:
 		if _panel:
-			_panel.set_title("ГОТОВИМ: %d сек" % ceil(time_left))
+			if (_cooker and _cooker.is_in_baking_phase()) or time_left <= 6.0:
+				_panel.set_title("🔥 ЗАПЕКАНИЕ: %d сек" % ceil(time_left))
+			else:
+				_panel.set_title("РАСКЛАДКА: %d сек" % ceil(maxf(time_left - 6.0, 1.0)))
 
 func _on_cook_finish(_order) -> void:
 	cook_progress.value = 100
 	_cook_indicator_time = 0.0
+	if _cooker:
+		_cooker.stop()
 	_set_camera(_cam_completed)
 	_set_furnace_indicator(_furnace_ind0)
 	machine.force_transition(MachineController.State.DISPENSING)
@@ -333,6 +460,9 @@ func _take_pizza() -> void:
 	_cook_indicator_time = 0.0
 	_set_camera(_cam_off)
 	_set_furnace_indicator(_furnace_ind0)
+	if _cooker:
+		_cooker.stop()
+
 	cook_progress.value = 0
 	if machine.current_state in [MachineController.State.FINISH, MachineController.State.DISPENSING]:
 		machine.force_transition(MachineController.State.IDLE)

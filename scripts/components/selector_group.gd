@@ -23,6 +23,8 @@ func _ready() -> void:
 func select(i: int) -> void:
 	sel_idx = clampi(i, 0, maxi(opts.size() - 1, 0))
 	_apply()
+	if sel_idx < opts.size() and opts[sel_idx] is ClickableSprite:
+		opts[sel_idx].play_click_anim()
 	option_selected.emit(sel_idx)
 
 

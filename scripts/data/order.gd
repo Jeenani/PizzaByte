@@ -24,7 +24,7 @@ var total_fat: float = 0.0
 var total_carbs: float = 0.0
 
 # --- Приготовление ---
-var cooking_time: float = 14.0   # Время готовки (сек)
+var cooking_time: float = 20.0   # 14.0 сек раскладка слоев + 4.0 сек запекание + 2.0 сек спуск платформы под печь
 var order_name: String = ""     # Имя в очереди
 
 # --- Оплата наличными ---
