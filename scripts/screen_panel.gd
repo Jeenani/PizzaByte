@@ -57,7 +57,17 @@ var sec_pizza: Node2D
 var sec_size: Node2D
 var sec_dough: Node2D
 var sec_height: Node2D
+var sec_payment: Control
 var sec_next: Node2D
+
+signal promo_code_submitted(code: String)
+signal payment_method_changed(method_name: String)
+
+var _promo_input: LineEdit
+var _promo_status: Label
+var _pay_total_lbl: Label
+var _pay_method_btns: Array[Button] = []
+var _selected_pay_method := 0 # 0: НАЛИЧНЫЕ, 1: КАРТОЙ, 2: МОНЕТЫ
 
 var _mg: SelectorGroup
 var _al: ClickableSprite
@@ -123,6 +133,7 @@ func _build() -> void:
 	_build_size()
 	_build_dough()
 	_build_height()
+	_build_payment()
 	_build_next()
 
 
@@ -232,6 +243,7 @@ func _build_size() -> void:
 
 	_sg.select_quiet(1)
 	_sg.option_selected.connect(func(i):
+		AudioManager.play_click_dizzy()
 		size_changed.emit(i)
 		if i < _size_icons.size():
 			_pop_icon(_size_icons[i])
@@ -261,6 +273,7 @@ func _build_dough() -> void:
 		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lb.z_index = 1; btn.add_child(lb)
 	_dg.select_quiet(0)
 	_dg.option_selected.connect(func(i):
+		AudioManager.play_click_dizzy()
 		dough_changed.emit(i)
 		if i < _dough_icons.size():
 			_pop_icon(_dough_icons[i])
@@ -299,16 +312,298 @@ func _build_height() -> void:
 	lh1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lh1.z_index = 1; h1.add_child(lh1)
 	_hg.select_quiet(0)
 	_hg.option_selected.connect(func(i):
+		AudioManager.play_click_dizzy()
 		height_changed.emit(i == 1)
 		if i < _height_icons.size():
 			_pop_icon(_height_icons[i])
 	)
 
+class PizzaSliceIcon extends Control:
+	func _init() -> void:
+		custom_minimum_size = Vector2(56, 52)
+		size = Vector2(56, 52)
+		mouse_filter = MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var pts := PackedVector2Array([
+			Vector2(12, 10),
+			Vector2(44, 10),
+			Vector2(28, 44),
+		])
+		# Сырная начинка
+		draw_colored_polygon(pts, Color("#f3bd44"))
+		# Корочка
+		draw_line(Vector2(10, 10), Vector2(46, 10), Color("#c77c22"), 5.0, true)
+		# Пепперони
+		draw_circle(Vector2(28, 20), 4.0, Color("#be2b22"))
+		draw_circle(Vector2(22, 28), 3.0, Color("#be2b22"))
+		draw_circle(Vector2(34, 28), 3.0, Color("#be2b22"))
+		# Золотистый яркий контур как на скриншоте
+		var outline := PackedVector2Array([
+			Vector2(10, 10), Vector2(46, 10), Vector2(28, 46), Vector2(10, 10)
+		])
+		draw_polyline(outline, Color("#ffcc33"), 2.5, true)
+
+
+func _build_payment() -> void:
+	sec_payment = Control.new()
+	sec_payment.name = "SecPayment"
+	sec_payment.position = Vector2(PAD, 90)
+	sec_payment.size = Vector2(CW, 580)
+	sec_payment.visible = false
+	add_child(sec_payment)
+
+	var bg_panel := Panel.new()
+	bg_panel.position = Vector2.ZERO
+	bg_panel.size = Vector2(CW, 580)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color("#070d18")
+	sb.border_color = Color("#1c2b44")
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(14)
+	bg_panel.add_theme_stylebox_override("panel", sb)
+	sec_payment.add_child(bg_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.position = Vector2(18, 16)
+	vbox.size = Vector2(CW - 36, 548)
+	vbox.add_theme_constant_override("separation", 14)
+	bg_panel.add_child(vbox)
+
+	# ── 1. СЕКЦИЯ ПРОМОКОД ──
+	var promo_head := HBoxContainer.new()
+	var promo_title := Label.new()
+	promo_title.text = "🎵   ПРОМОКОД"
+	if _font: promo_title.add_theme_font_override("font", _font)
+	promo_title.add_theme_font_size_override("font_size", 15)
+	promo_title.add_theme_color_override("font_color", Color("#a8bcd8"))
+	promo_head.add_child(promo_title)
+	vbox.add_child(promo_head)
+
+	var promo_row := HBoxContainer.new()
+	promo_row.add_theme_constant_override("separation", 10)
+
+	_promo_input = LineEdit.new()
+	_promo_input.placeholder_text = "Введи код"
+	_promo_input.custom_minimum_size = Vector2(220, 48)
+	_promo_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb_input := StyleBoxFlat.new()
+	sb_input.bg_color = Color("#0b1424")
+	sb_input.border_color = Color("#223654")
+	sb_input.set_border_width_all(2)
+	sb_input.set_corner_radius_all(8)
+	sb_input.content_margin_left = 12
+	_promo_input.add_theme_stylebox_override("normal", sb_input)
+	_promo_input.add_theme_stylebox_override("focus", sb_input)
+	if _font: _promo_input.add_theme_font_override("font", _font)
+	_promo_input.add_theme_font_size_override("font_size", 14)
+	_promo_input.add_theme_color_override("font_color", Color.WHITE)
+	_promo_input.add_theme_color_override("font_placeholder_color", Color("#586a88"))
+	promo_row.add_child(_promo_input)
+
+	var apply_btn := Button.new()
+	apply_btn.text = "Применить"
+	apply_btn.custom_minimum_size = Vector2(110, 48)
+	var sb_apply := StyleBoxFlat.new()
+	sb_apply.bg_color = Color("#0e1a2c")
+	sb_apply.border_color = Color("#e6a117")
+	sb_apply.set_border_width_all(2)
+	sb_apply.set_corner_radius_all(8)
+	apply_btn.add_theme_stylebox_override("normal", sb_apply)
+	apply_btn.add_theme_stylebox_override("hover", sb_apply)
+	apply_btn.add_theme_stylebox_override("pressed", sb_apply)
+	apply_btn.add_theme_stylebox_override("focus", sb_apply)
+	if _font: apply_btn.add_theme_font_override("font", _font)
+	apply_btn.add_theme_font_size_override("font_size", 13)
+	apply_btn.add_theme_color_override("font_color", Color("#ffcc33"))
+	apply_btn.pressed.connect(_on_promo_apply_pressed)
+	promo_row.add_child(apply_btn)
+	vbox.add_child(promo_row)
+
+	_promo_status = Label.new()
+	_promo_status.text = ""
+	if _font: _promo_status.add_theme_font_override("font", _font)
+	_promo_status.add_theme_font_size_override("font_size", 12)
+	_promo_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(_promo_status)
+	# ── РАЗДЕЛИТЕЛЬ 1 ──
+	var sep1 := ColorRect.new()
+	sep1.custom_minimum_size = Vector2(0, 2)
+	sep1.color = Color("#18263c")
+	vbox.add_child(sep1)
+
+	# ── 2. СЕКЦИЯ ОПЛАТА ──
+	var pay_head := HBoxContainer.new()
+	var pay_title := Label.new()
+	pay_title.text = "👁   ОПЛАТА"
+	if _font: pay_title.add_theme_font_override("font", _font)
+	pay_title.add_theme_font_size_override("font_size", 15)
+	pay_title.add_theme_color_override("font_color", Color("#a8bcd8"))
+	pay_head.add_child(pay_title)
+	vbox.add_child(pay_head)
+
+	var pay_row1 := HBoxContainer.new()
+	pay_row1.add_theme_constant_override("separation", 10)
+
+	var btn_cash := Button.new()
+	btn_cash.text = "🪙  НАЛИЧНЫЕ"
+	btn_cash.custom_minimum_size = Vector2(175, 54)
+	btn_cash.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_cash.pressed.connect(func(): _select_pay_method(0))
+	pay_row1.add_child(btn_cash)
+	_pay_method_btns.append(btn_cash)
+
+	var btn_card := Button.new()
+	btn_card.text = "💳  КАРТОЙ"
+	btn_card.custom_minimum_size = Vector2(175, 54)
+	btn_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_card.pressed.connect(func(): _select_pay_method(1))
+	pay_row1.add_child(btn_card)
+	_pay_method_btns.append(btn_card)
+	vbox.add_child(pay_row1)
+
+	var pay_row2 := HBoxContainer.new()
+	pay_row2.add_theme_constant_override("separation", 10)
+
+	var btn_coins := Button.new()
+	btn_coins.text = "🪙  МОНЕТЫ"
+	btn_coins.custom_minimum_size = Vector2(175, 54)
+	btn_coins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_coins.pressed.connect(func(): _select_pay_method(2))
+	pay_row2.add_child(btn_coins)
+	_pay_method_btns.append(btn_coins)
+
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(175, 54)
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pay_row2.add_child(spacer)
+	vbox.add_child(pay_row2)
+
+	_update_pay_method_styles()
+
+	# ── РАЗДЕЛИТЕЛЬ 2 ──
+	var sep2 := ColorRect.new()
+	sep2.custom_minimum_size = Vector2(0, 2)
+	sep2.color = Color("#18263c")
+	vbox.add_child(sep2)
+
+	# ── 3. СТРОКА ИТОГО ──
+	var total_row := HBoxContainer.new()
+	total_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	total_row.add_theme_constant_override("separation", 14)
+
+	var lbl_itogo := Label.new()
+	lbl_itogo.text = "Итого:"
+	if _font: lbl_itogo.add_theme_font_override("font", _font)
+	lbl_itogo.add_theme_font_size_override("font_size", 22)
+	lbl_itogo.add_theme_color_override("font_color", Color("#ffcc33"))
+	total_row.add_child(lbl_itogo)
+
+	var pizza_slice := PizzaSliceIcon.new()
+	total_row.add_child(pizza_slice)
+
+	_pay_total_lbl = Label.new()
+	_pay_total_lbl.text = "12.90$"
+	if _font: _pay_total_lbl.add_theme_font_override("font", _font)
+	_pay_total_lbl.add_theme_font_size_override("font_size", 26)
+	_pay_total_lbl.add_theme_color_override("font_color", Color.WHITE)
+	total_row.add_child(_pay_total_lbl)
+
+	vbox.add_child(total_row)
+
+	# ── 4. КНОПКА ОПЛАТИТЬ ──
+	var pay_submit_btn := Button.new()
+	pay_submit_btn.text = "👉   Оплатить"
+	pay_submit_btn.custom_minimum_size = Vector2(CW - 36, 60)
+	var sb_pay := StyleBoxFlat.new()
+	sb_pay.bg_color = Color("#09101d")
+	sb_pay.border_color = Color("#e6a117")
+	sb_pay.set_border_width_all(2)
+	sb_pay.set_corner_radius_all(10)
+	pay_submit_btn.add_theme_stylebox_override("normal", sb_pay)
+	pay_submit_btn.add_theme_stylebox_override("hover", sb_pay)
+	pay_submit_btn.add_theme_stylebox_override("pressed", sb_pay)
+	pay_submit_btn.add_theme_stylebox_override("focus", sb_pay)
+	if _font: pay_submit_btn.add_theme_font_override("font", _font)
+	pay_submit_btn.add_theme_font_size_override("font_size", 22)
+	pay_submit_btn.add_theme_color_override("font_color", Color("#ffcc33"))
+	pay_submit_btn.pressed.connect(func():
+		AudioManager.play_payment_random()
+		AudioManager.play_click_fine()
+		next_pressed.emit()
+	)
+	vbox.add_child(pay_submit_btn)
+
+
+func _select_pay_method(idx: int) -> void:
+	_selected_pay_method = idx
+	_update_pay_method_styles()
+	AudioManager.play_click_dizzy()
+	var names := ["cash", "card", "coins"]
+	if idx < names.size():
+		payment_method_changed.emit(names[idx])
+
+
+func _update_pay_method_styles() -> void:
+	for i in range(_pay_method_btns.size()):
+		var btn: Button = _pay_method_btns[i]
+		var is_sel: bool = (i == _selected_pay_method)
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(8)
+		if is_sel:
+			sb.bg_color = Color("#132034")
+			sb.border_color = Color("#e6a117")
+			sb.set_border_width_all(2)
+			btn.add_theme_color_override("font_color", Color("#ffcc33"))
+		else:
+			sb.bg_color = Color("#0b1424")
+			sb.border_color = Color("#223654")
+			sb.set_border_width_all(1)
+			btn.add_theme_color_override("font_color", Color("#a0b4d0"))
+		btn.add_theme_stylebox_override("normal", sb)
+		btn.add_theme_stylebox_override("hover", sb)
+		btn.add_theme_stylebox_override("pressed", sb)
+		btn.add_theme_stylebox_override("focus", sb)
+		if _font: btn.add_theme_font_override("font", _font)
+		btn.add_theme_font_size_override("font_size", 14)
+
+
+func _on_promo_apply_pressed() -> void:
+	AudioManager.play_click_dizzy()
+	if not _promo_input:
+		return
+	var code := _promo_input.text.strip_edges()
+	if code == "":
+		_promo_status.text = "Введите промокод!"
+		_promo_status.add_theme_color_override("font_color", Color("#ff5555"))
+		return
+	promo_code_submitted.emit(code)
+
+
+func set_payment_price(price: float) -> void:
+	if _pay_total_lbl:
+		_animate_label_pop(_pay_total_lbl, "%.2f$" % price)
+
+
+func set_promo_result(success: bool, msg: String) -> void:
+	if not _promo_status:
+		return
+	_promo_status.text = msg
+	if success:
+		_promo_status.add_theme_color_override("font_color", Color("#55ff77"))
+	else:
+		_promo_status.add_theme_color_override("font_color", Color("#ff5555"))
+
+
 
 func _build_next() -> void:
 	sec_next = Node2D.new(); sec_next.name = "SecNext"; add_child(sec_next)
 	_bn = ClickableSprite.make(_t.get("b_sel"), null, Vector2(CW, 58), Vector2(PAD, 800))
-	sec_next.add_child(_bn); _bn.clicked.connect(func(): next_pressed.emit())
+	sec_next.add_child(_bn)
+	_bn.clicked.connect(func():
+		AudioManager.play_click_fine()
+		next_pressed.emit()
+	)
 	_nl = _lbl("ДАЛЕЕ →", 22, Color(0.12, 0.08, 0.02), Vector2(PAD, 800), Vector2(CW, 58))
 	_nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_nl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -349,6 +644,7 @@ func _process(delta: float) -> void:
 
 
 func _on_mode_sel(i: int) -> void:
+	AudioManager.play_click_dizzy()
 	_mode = "manual" if i == 0 else "auto"
 	_update_mode_labels(i)
 	_animate_label_pop(_lbl_manual, "Ручной")
@@ -398,6 +694,7 @@ func _animate_label_pop(lbl: Label, new_text: String) -> void:
 
 ## Анимация смены пиццы (вылет в сторону, прилет новой с пружинящим овершутом)
 func _chg_preset(d: int) -> void:
+	AudioManager.play_comedy_pop()
 	_pi = wrapi(_pi + d, 0, _pdata.size())
 	var p = _pdata[_pi]
 
@@ -459,41 +756,55 @@ func set_title(t: String) -> void: _tl.text = t
 func set_next_text(t: String) -> void: _nl.text = t
 
 
+var _show_tween: Tween
+
 ## Плавное появление секций (Tween fade-in)
 func _anim_show(nodes: Array, delay_step := 0.06) -> void:
+	if is_instance_valid(_show_tween):
+		_show_tween.kill()
+	_show_tween = create_tween()
 	for i in nodes.size():
 		var n: CanvasItem = nodes[i]
 		n.visible = true
 		n.modulate.a = 0.0
-		var tw := create_tween()
-		tw.tween_property(n, "modulate:a", 1.0, 0.2).set_delay(i * delay_step).set_ease(Tween.EASE_OUT)
+		_show_tween.tween_property(n, "modulate:a", 1.0, 0.18).set_delay(i * delay_step).set_ease(Tween.EASE_OUT)
 
 
 func show_state(st: int) -> void:
+	# Прерываем прошлые анимации показа
+	if is_instance_valid(_show_tween):
+		_show_tween.kill()
+
 	# Скрыть всё
 	_tl.visible = false; _tl.modulate.a = 1.0
-	sec_mode.visible = false; sec_pizza.visible = false
-	sec_size.visible = false; sec_dough.visible = false
-	sec_height.visible = false; sec_next.visible = false
+	for n in [sec_mode, sec_pizza, sec_size, sec_dough, sec_height, sec_payment, sec_next]:
+		if is_instance_valid(n):
+			n.visible = false
+			n.modulate.a = 0.0
+
 	match st:
 		0:  # IDLE
 			_tl.visible = true
 			set_title("НАЧАТЬ ЗАКАЗ")
-			sec_next.visible = true; set_next_text("НАЧАТЬ →")
+			sec_next.visible = true; sec_next.modulate.a = 1.0; set_next_text("НАЧАТЬ →")
 		2:  # SELECT_PARAMETERS — полная панель
 			_anim_show([sec_mode, sec_pizza, sec_size, sec_dough, sec_height])
-			sec_next.visible = true; set_next_text("ДАЛЕЕ →")
-		5:  # PAYMENT (оплата — пока заглушка для будущих кнопок)
+			sec_next.visible = true; sec_next.modulate.a = 1.0; set_next_text("ДАЛЕЕ →")
+		5:  # PAYMENT (блок промокода, способов оплаты, итого и кнопка Оплатить)
 			_tl.visible = true
 			set_title("ОПЛАТА")
-			sec_next.visible = true; set_next_text("ОПЛАТИТЬ")
+			sec_payment.visible = true
+			sec_payment.modulate.a = 0.0
+			var tw_pay := create_tween()
+			tw_pay.tween_property(sec_payment, "modulate:a", 1.0, 0.22).set_ease(Tween.EASE_OUT)
+			sec_next.visible = false # Кнопка оплаты находится внутри панели точно как на скриншоте
 		6:  # QUEUE
 			_tl.visible = true
 			set_title("В ОЧЕРЕДИ"); sec_next.visible = false
 		7:  # COOKING
 			_tl.visible = true
 			set_title("ГОТОВИМ...")
-			sec_next.visible = true
+			sec_next.visible = true; sec_next.modulate.a = 1.0
 			set_next_text("СКИП >>")
 		8:  # DISPENSING
 			_tl.visible = true
@@ -502,5 +813,5 @@ func show_state(st: int) -> void:
 		9:  # FINISH
 			_tl.visible = true
 			set_title("ГОТОВО! ЗАБЕРИТЕ")
-			sec_next.visible = true
+			sec_next.visible = true; sec_next.modulate.a = 1.0
 			set_next_text("НОВЫЙ ЗАКАЗ →")

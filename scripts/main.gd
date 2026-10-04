@@ -124,6 +124,12 @@ func _ready() -> void:
 	_panel.size_changed.connect(_on_size_changed)
 	_panel.dough_changed.connect(_on_dough_changed)
 	_panel.height_changed.connect(_on_height_changed)
+	_panel.promo_code_submitted.connect(_on_promo_submitted)
+	_panel.payment_method_changed.connect(_on_payment_method_changed)
+	order_mgr.price_changed.connect(func(p):
+		if _panel:
+			_panel.set_payment_price(p)
+	)
 
 	# Подключить FSM
 	machine.state_changed.connect(_on_state_changed)
@@ -211,7 +217,7 @@ func _setup_machine_layout() -> void:
 	)
 	_cooker.baking_started.connect(func():
 		if _panel and machine.current_state == MachineController.State.COOKING:
-			_panel.set_title("🔥 ЗАПЕКАНИЕ (5 сек)")
+			_panel.set_title("🔥 ЗАПЕКАНИЕ (6 сек)")
 		_start_oven_heat()
 	)
 
@@ -308,6 +314,23 @@ func _on_height_changed(tall: bool) -> void:
 	print("[Game] Высота: %s" % ("высокая" if tall else "обычная"))
 
 
+func _on_promo_submitted(code: String) -> void:
+	if not order_mgr:
+		return
+	var ok: bool = order_mgr.apply_promo_code(code)
+	if ok and order_mgr.current_order:
+		var promo = order_mgr.current_order.promo_code
+		var desc: String = promo.description if promo else "Скидка применена!"
+		_panel.set_promo_result(true, desc)
+		_panel.set_payment_price(order_mgr.current_order.final_price)
+	else:
+		_panel.set_promo_result(false, "Неверный код")
+
+
+func _on_payment_method_changed(method_name: String) -> void:
+	print("[Main] Выбран способ оплаты: %s" % method_name)
+
+
 # ═══ НАВИГАЦИЯ ═══
 
 func _on_next_pressed() -> void:
@@ -323,7 +346,10 @@ func _on_next_pressed() -> void:
 		MachineController.State.SELECT_PARAMETERS:
 			# После выбора параметров — сразу оплата
 			machine.force_transition(MachineController.State.PAYMENT)
+			if _panel and order_mgr.current_order:
+				_panel.set_payment_price(order_mgr.current_order.final_price)
 		MachineController.State.PAYMENT:
+			AudioManager.play_payment_random()
 			machine.force_transition(MachineController.State.QUEUE)
 			queue_mgr.add_to_queue(order_mgr.current_order)
 		MachineController.State.COOKING:
@@ -464,6 +490,7 @@ func _show_pizza_box() -> void:
 	pizza_box.visible = true
 	pizza_box.modulate.a = 0.0
 	pizza_box.position = Vector2(0, -20)
+	AudioManager.play_pizza_completed()
 	var tw := create_tween()
 	tw.tween_property(pizza_box, "modulate:a", 1.0, 0.4)
 	tw.parallel().tween_property(pizza_box, "position", Vector2.ZERO, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -476,6 +503,7 @@ func _take_pizza() -> void:
 			machine.force_transition(MachineController.State.IDLE)
 		return
 	print("[Game] Игрок забирает пиццу!")
+	AudioManager.play_pickup_random()
 	var tw := create_tween()
 	tw.tween_property(pizza_box, "modulate:a", 0.0, 0.35)
 	tw.parallel().tween_property(pizza_box, "position", Vector2(0, -25), 0.35)

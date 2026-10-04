@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 GameData="*res://scripts/autoload/game_data.gd"
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
+AudioManager="*res://scripts/managers/audio_manager.gd"
 
 [display]
 

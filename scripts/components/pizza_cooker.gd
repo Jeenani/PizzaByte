@@ -153,6 +153,8 @@ func start_cooking(order: Order) -> void:
 
 	_current_pizza_name = _detect_pizza_type(order)
 	print("[PizzaCooker] Старт готовки: %s" % _current_pizza_name)
+	AudioManager.play_cooking_groove()
+
 	_run_cooking_sequence(_current_pizza_name)
 
 
@@ -199,7 +201,7 @@ func _cook_carbonara() -> void:
 		"res://assets/textures/ingredients/carbonara/carbonara_cheese.png",
 		"res://assets/textures/ingredients/carbonara/carbonara_cheese2.png"
 	]
-	await _drop_batch(0, cheese_paths, 2.8, "sauce_spiral", 0.50)
+	await _drop_batch(0, cheese_paths, 1.8, "sauce_spiral", 0.50)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Мясо", 1)
@@ -208,7 +210,7 @@ func _cook_carbonara() -> void:
 		for i in range(1, 7):
 			var suffix := "" if i == 1 else str(i)
 			meat_paths.append("res://assets/textures/ingredients/carbonara/carbonara_meat%s.png" % suffix)
-	await _drop_batch(1, meat_paths, 2.8, "bacon_ring", 0.44)
+	await _drop_batch(1, meat_paths, 1.8, "bacon_ring", 0.44)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Лук", 2)
@@ -217,7 +219,7 @@ func _cook_carbonara() -> void:
 		for i in range(1, 5):
 			var suffix := "" if i == 1 else str(i)
 			onion_paths.append("res://assets/textures/ingredients/carbonara/carbonara_onion%s.png" % suffix)
-	await _drop_batch(2, onion_paths, 2.8, "onion_rings", 0.38)
+	await _drop_batch(2, onion_paths, 1.8, "onion_rings", 0.38)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Сырная крошка", 3)
@@ -226,7 +228,7 @@ func _cook_carbonara() -> void:
 		for i in range(1, 7):
 			var idx := ((i - 1) % 5) + 1
 			part_paths.append("res://assets/textures/ingredients/carbonara/carbonara_cheese_part%d.png" % idx)
-	await _drop_batch(3, part_paths, 2.8, "cheese_layer", 0.34)
+	await _drop_batch(3, part_paths, 1.8, "cheese_layer", 0.34)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Зелень", 0)
@@ -235,7 +237,7 @@ func _cook_carbonara() -> void:
 		for i in range(1, 5):
 			var suffix := "" if i == 1 else str(i)
 			herb_paths.append("res://assets/textures/ingredients/carbonara/carbonara_herbs%s.png" % suffix)
-	await _drop_batch_dual(0, 1, herb_paths, 2.8, "herbs_top", 0.40)
+	await _drop_batch_dual(0, 1, herb_paths, 1.8, "herbs_top", 0.40)
 
 
 func _cook_chicken_bomboni() -> void:
@@ -250,7 +252,7 @@ func _cook_chicken_bomboni() -> void:
 		"res://assets/textures/ingredients/chickenbomb/chicken_bomboni_sauce.png",
 		"res://assets/textures/ingredients/chickenbomb/chicken_bomboni_sauce2.png"
 	]
-	await _drop_batch(0, sauce_paths, 2.8, "sauce_spiral", 0.52)
+	await _drop_batch(0, sauce_paths, 2.25, "sauce_spiral", 0.52)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Лук", 1)
@@ -259,7 +261,7 @@ func _cook_chicken_bomboni() -> void:
 		for i in range(1, 5):
 			var suffix := "" if i == 1 else str(i)
 			onion_paths.append("res://assets/textures/ingredients/carbonara/carbonara_onion%s.png" % suffix)
-	await _drop_batch(1, onion_paths, 2.8, "onion_rings", 0.38)
+	await _drop_batch(1, onion_paths, 2.25, "onion_rings", 0.38)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Перец", 2)
@@ -269,7 +271,7 @@ func _cook_chicken_bomboni() -> void:
 			var idx := ((i - 1) % 8) + 1
 			var suffix := "" if idx == 1 else str(idx)
 			pepper_paths.append("res://assets/textures/ingredients/chickenbomb/chicken_bomboni_pepper%s.png" % suffix)
-	await _drop_batch(2, pepper_paths, 3.4, "pepper_scatter", 0.32)
+	await _drop_batch(2, pepper_paths, 2.25, "pepper_scatter", 0.32)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Куриные наггетсы", 3)
@@ -278,7 +280,7 @@ func _cook_chicken_bomboni() -> void:
 		for i in range(1, 7):
 			var idx := ((i - 1) % 5) + 1
 			nugget_paths.append("res://assets/textures/ingredients/chickenbomb/chicken_bomboni_nugget%d.png" % idx)
-	await _drop_batch(3, nugget_paths, 5.0, "chicken_pieces", 0.45)
+	await _drop_batch(3, nugget_paths, 2.25, "chicken_pieces", 0.45)
 
 
 
@@ -295,7 +297,7 @@ func _cook_margarita() -> void:
 		"res://assets/textures/ingredients/margarita/margarita_sauce.png",
 		"res://assets/textures/ingredients/margarita/margarita_sauce2.png"
 	]
-	await _drop_batch(0, sauce_paths, 3.0, "sauce_spiral", 0.52)
+	await _drop_batch(0, sauce_paths, 2.25, "sauce_spiral", 0.52)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Сыр Моцарелла", 1)
@@ -303,7 +305,7 @@ func _cook_margarita() -> void:
 	for r in range(4):
 		cheese_paths.append("res://assets/textures/ingredients/margarita/margarita_cheese.png")
 		cheese_paths.append("res://assets/textures/ingredients/margarita/margarita_cheese2.png")
-	await _drop_batch(1, cheese_paths, 3.0, "margarita_cheese", 0.46)
+	await _drop_batch(1, cheese_paths, 2.25, "margarita_cheese", 0.46)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Оливковое масло", 2)
@@ -313,7 +315,7 @@ func _cook_margarita() -> void:
 			var idx := ((i - 1) % 4) + 1
 			var suffix := "" if idx == 1 else str(idx)
 			oil_paths.append("res://assets/textures/ingredients/margarita/margarita_oil%s.png" % suffix)
-	await _drop_batch(2, oil_paths, 4.0, "scatter_mid", 0.36)
+	await _drop_batch(2, oil_paths, 2.25, "scatter_mid", 0.36)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Базилик", 3)
@@ -322,7 +324,7 @@ func _cook_margarita() -> void:
 		for i in range(1, 5):
 			var suffix := "" if i == 1 else str(i)
 			bazilik_paths.append("res://assets/textures/ingredients/margarita/margarita_bazilik%s.png" % suffix)
-	await _drop_batch(3, bazilik_paths, 4.0, "herbs_top", 0.42)
+	await _drop_batch(3, bazilik_paths, 2.25, "herbs_top", 0.42)
 
 
 func _cook_pepperoni() -> void:
@@ -337,7 +339,7 @@ func _cook_pepperoni() -> void:
 		"res://assets/textures/ingredients/pepperoni/margarita_sauce.png",
 		"res://assets/textures/ingredients/pepperoni/margarita_sauce2.png"
 	]
-	await _drop_batch(0, sauce_paths, 2.5, "sauce_spiral", 0.50)
+	await _drop_batch(0, sauce_paths, 1.8, "sauce_spiral", 0.50)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Сырная основа", 1)
@@ -346,7 +348,7 @@ func _cook_pepperoni() -> void:
 		for i in range(1, 7):
 			var idx := ((i - 1) % 5) + 1
 			cheese_paths.append("res://assets/textures/ingredients/pepperoni/carbonara_cheese_part%d.png" % idx)
-	await _drop_batch(1, cheese_paths, 2.5, "cheese_layer", 0.36)
+	await _drop_batch(1, cheese_paths, 1.8, "cheese_layer", 0.36)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Лук", 2)
@@ -356,7 +358,7 @@ func _cook_pepperoni() -> void:
 		onion_paths.append("res://assets/textures/ingredients/pepperoni/carbonara_onion2.png")
 		onion_paths.append("res://assets/textures/ingredients/pepperoni/carbonara_onion3.png")
 		onion_paths.append("res://assets/textures/ingredients/pepperoni/carbonara_onion4.png")
-	await _drop_batch(2, onion_paths, 2.5, "onion_rings", 0.38)
+	await _drop_batch(2, onion_paths, 1.8, "onion_rings", 0.38)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Пряный перец", 3)
@@ -368,7 +370,7 @@ func _cook_pepperoni() -> void:
 		for i in range(1, 4):
 			var suffix := "" if i == 1 else str(i)
 			pepper_paths.append("res://assets/textures/ingredients/pepperoni/chicken_bomboni_pepper%s.png" % suffix)
-	await _drop_batch(3, pepper_paths, 3.0, "pepper_scatter", 0.32)
+	await _drop_batch(3, pepper_paths, 1.8, "pepper_scatter", 0.32)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Пепперони", 0)
@@ -377,13 +379,14 @@ func _cook_pepperoni() -> void:
 	for i in range(1, 15):
 		var idx := ((i - 1) % 5) + 1
 		meat_paths.append("res://assets/textures/ingredients/pepperoni/pepperoni_meat%d.png" % idx)
-	await _drop_batch_dual(0, 3, meat_paths, 3.5, "pepperoni_rings", 0.46)
+	await _drop_batch_dual(0, 3, meat_paths, 1.8, "pepperoni_rings", 0.46)
 
 
 func _start_baking_phase() -> void:
 	_is_baking = true
 	baking_started.emit()
-	print("[PizzaCooker] 🔥 ЗАПЕКАНИЕ: Платформа остановлена! Плавное вплавление ингредиентов...")
+	AudioManager.play_oven_baking()
+	print("[PizzaCooker] 🔥 ЗАПЕКАНИЕ (6 сек): Платформа остановлена! Плавное вплавление ингредиентов...")
 
 	# 1. ОСТАНАВЛИВАЕМ ВАЛ ровно на кадре 0 (stove_platform_1.png).
 	# Теперь текстура вала пиксель-в-пиксель совпадает с готовой пиццей!
@@ -426,10 +429,12 @@ func _start_baking_phase() -> void:
 		tw_dissolve.chain().tween_property(_platform_rect, "scale", Vector2(PLATFORM_SCALE, PLATFORM_SCALE), 0.65).set_trans(Tween.TRANS_SINE)
 		tw_dissolve.parallel().tween_property(_completed_rect, "scale", Vector2(PLATFORM_SCALE, PLATFORM_SCALE), 0.65).set_trans(Tween.TRANS_SINE)
 
-	var bake_timer := 4.0
+	var bake_timer := 6.0
 	while bake_timer > 0.0 and _is_cooking and not _skip_baking_requested:
 		await get_tree().create_timer(0.2).timeout
 		bake_timer -= 0.2
+
+	AudioManager.stop_oven_baking()
 
 	if _skip_baking_requested or not _is_cooking:
 		return
@@ -446,12 +451,12 @@ func _start_baking_phase() -> void:
 	if not _is_cooking or _skip_baking_requested:
 		return
 
-	# Плавный спуск ОСТАНОВЛЕННОЙ платформы с готовой пиццей вниз под печь
+	# Плавный спуск ОСТАНОВЛЕННОЙ платформы с готовой пиццей вниз под печь (1.5 сек)
 	var tw_exit := create_tween()
 	_active_tweens.append(tw_exit)
 	tw_exit.set_parallel(true)
-	tw_exit.tween_property(_platform_rect, "position:y", PLATFORM_EXIT_Y, 2.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw_exit.tween_property(_completed_rect, "position:y", PLATFORM_EXIT_Y, 2.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw_exit.tween_property(_platform_rect, "position:y", PLATFORM_EXIT_Y, 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw_exit.tween_property(_completed_rect, "position:y", PLATFORM_EXIT_Y, 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	await tw_exit.finished
 	print("[PizzaCooker] Платформа спущена под печь!")
 
@@ -664,6 +669,7 @@ func skip_to_baking() -> void:
 	if _is_baking or not _is_cooking:
 		return
 	print("[PizzaCooker] ⏭️ Скип раскладки -> переход к запеканию!")
+	AudioManager.stop_cooking_groove()
 	_skip_layers_requested = true
 	for tw in _active_tweens:
 		if is_instance_valid(tw): tw.kill()
@@ -674,6 +680,8 @@ func skip_to_finish() -> void:
 	if not _is_cooking:
 		return
 	print("[PizzaCooker] ⏭️ Скип запекания -> моментальная выдача!")
+	AudioManager.stop_cooking_groove()
+	AudioManager.stop_oven_baking()
 	_skip_baking_requested = true
 	for tw in _active_tweens:
 		if is_instance_valid(tw): tw.kill()
@@ -707,6 +715,8 @@ func _cleanup() -> void:
 	_is_baking = false
 	_skip_layers_requested = false
 	_skip_baking_requested = false
+	AudioManager.stop_cooking_groove()
+	AudioManager.stop_oven_baking()
 	for tw in _active_tweens:
 		if is_instance_valid(tw): tw.kill()
 	_active_tweens.clear()

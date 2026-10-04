@@ -65,7 +65,7 @@ func skip_cooking() -> void:
 ## Перемотать приготовление к фазе запекания
 func skip_to_baking() -> void:
 	if is_cooking and current_cooking:
-		_cook_elapsed = maxf(_cook_elapsed, 14.0)
+		_cook_elapsed = maxf(_cook_elapsed, 9.0)
 		var progress := clampf(_cook_elapsed / _cook_total, 0.0, 1.0)
 		var time_left := maxf(_cook_total - _cook_elapsed, 0.0)
 		cooking_progress.emit(progress, time_left)
