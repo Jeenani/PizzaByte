@@ -63,6 +63,7 @@ var _neon: NeonSign
 var _dispensers: Array[DispenserUnit] = []
 const PizzaCookerScript := preload("res://scripts/components/pizza_cooker.gd")
 var _cooker: Node2D
+var _oven_heat_tween: Tween
 
 
 # ── Текстуры камеры печи ──
@@ -211,6 +212,7 @@ func _setup_machine_layout() -> void:
 	_cooker.baking_started.connect(func():
 		if _panel and machine.current_state == MachineController.State.COOKING:
 			_panel.set_title("🔥 ЗАПЕКАНИЕ (5 сек)")
+		_start_oven_heat()
 	)
 
 	# Неоновая вывеска на верхней левой плашке
@@ -344,6 +346,7 @@ func _handle_cooking_skip() -> void:
 			_panel.set_title("🔥 ЗАПЕКАНИЕ")
 	else:
 		print("[Main] ⏭️ Скип 2/2: Запекание завершено, переходим к выдаче!")
+		_stop_oven_heat()
 		_cooker.skip_to_finish()
 		queue_mgr.skip_cooking()
 
@@ -418,6 +421,7 @@ func _on_cook_progress(progress: float, time_left: float) -> void:
 func _on_cook_finish(_order) -> void:
 	cook_progress.value = 100
 	_cook_indicator_time = 0.0
+	_stop_oven_heat()
 	if _cooker:
 		_cooker.stop()
 	_set_camera(_cam_completed)
@@ -425,6 +429,28 @@ func _on_cook_finish(_order) -> void:
 	machine.force_transition(MachineController.State.DISPENSING)
 	_show_pizza_box()
 	print("[Game] Готовка завершена! Пицца готова.")
+
+
+func _start_oven_heat() -> void:
+	if not oven_interior:
+		return
+	if is_instance_valid(_oven_heat_tween):
+		_oven_heat_tween.kill()
+	_oven_heat_tween = create_tween()
+	# Плавное нарастание глубокого красного жара ТЭНов внутри печи
+	_oven_heat_tween.tween_property(oven_interior, "modulate", Color(1.40, 0.60, 0.40), 1.2).set_trans(Tween.TRANS_SINE)
+	# Живое дыхание раскаленной печи
+	_oven_heat_tween.tween_property(oven_interior, "modulate", Color(1.50, 0.65, 0.35), 0.8).set_trans(Tween.TRANS_SINE)
+	_oven_heat_tween.tween_property(oven_interior, "modulate", Color(1.35, 0.55, 0.40), 0.8).set_trans(Tween.TRANS_SINE)
+
+
+func _stop_oven_heat() -> void:
+	if not oven_interior:
+		return
+	if is_instance_valid(_oven_heat_tween):
+		_oven_heat_tween.kill()
+	_oven_heat_tween = create_tween()
+	_oven_heat_tween.tween_property(oven_interior, "modulate", Color.WHITE, 0.7).set_trans(Tween.TRANS_SINE)
 
 func _on_dispense_finish(_order) -> void:
 	if machine.current_state == MachineController.State.DISPENSING:

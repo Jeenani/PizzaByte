@@ -23,15 +23,13 @@ const RY_MAX := 74.0 * PLATFORM_SCALE # ~57.0
 var _dispensers: Array[DispenserUnit] = []
 var _platform_rect: TextureRect
 var _completed_rect: TextureRect
+var _bake_material: ShaderMaterial
 var _platform_frames: Array[Texture2D] = []
 var _completed_textures: Dictionary = {}
 
 var _cur_frame := 0
 var _frame_timer := 0.0
 const FRAME_DURATION := 0.12
-
-var _baking_heat_overlay: TextureRect
-var _steam_container: Node2D
 
 var _is_cooking := false
 var _is_baking := false
@@ -87,7 +85,7 @@ func _ready() -> void:
 		_platform_rect.texture = _platform_frames[0]
 	add_child(_platform_rect)
 
-	# 2. Оверлей готовой запеченной пиццы (проявляется на 14-й секунде)
+	# 2. Оверлей готовой запеченной пиццы с шейдером огненной трансформации
 	_completed_rect = TextureRect.new()
 	_completed_rect.name = "StovePlatformCompleted"
 	_completed_rect.position = Vector2(PLATFORM_X, PLATFORM_START_Y)
@@ -96,38 +94,14 @@ func _ready() -> void:
 	_completed_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_completed_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_completed_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_completed_rect.modulate.a = 0.0
 	_completed_rect.z_index = 6
+	var shader := load("res://shaders/pizza_bake_dissolve.gdshader") as Shader
+	if shader:
+		_bake_material = ShaderMaterial.new()
+		_bake_material.shader = shader
+		_completed_rect.material = _bake_material
+		_bake_material.set_shader_parameter("progress", 0.0)
 	add_child(_completed_rect)
-
-	# 3. Мягкий градиентный жар от ТЭНов (строго над пиццей и под корпусом)
-	_baking_heat_overlay = TextureRect.new()
-	_baking_heat_overlay.name = "BakingHeat"
-	_baking_heat_overlay.position = Vector2(PLATFORM_X, PLATFORM_START_Y - 20.0)
-	_baking_heat_overlay.size = Vector2(PLATFORM_W, PLATFORM_H + 40.0)
-	_baking_heat_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_baking_heat_overlay.stretch_mode = TextureRect.STRETCH_SCALE
-	_baking_heat_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_baking_heat_overlay.z_index = 8
-	var grad := Gradient.new()
-	grad.set_color(0, Color(1.0, 0.55, 0.1, 0.0))       # Верх: прозрачный
-	grad.add_point(0.65, Color(1.0, 0.38, 0.05, 0.15))   # Середина: нежный золотистый отсвет
-	grad.set_color(1, Color(1.0, 0.22, 0.02, 0.26))     # Низ ТЭНов: легкий теплый накал
-	var grad_tex := GradientTexture2D.new()
-	grad_tex.gradient = grad
-	grad_tex.fill_from = Vector2(0.5, 0.0)
-	grad_tex.fill_to = Vector2(0.5, 1.0)
-	grad_tex.width = 128
-	grad_tex.height = 128
-	_baking_heat_overlay.texture = grad_tex
-	_baking_heat_overlay.modulate.a = 0.0
-	add_child(_baking_heat_overlay)
-
-	# 4. Пар
-	_steam_container = Node2D.new()
-	_steam_container.name = "SteamContainer"
-	_steam_container.z_index = 510
-	add_child(_steam_container)
 
 	visible = false
 
@@ -138,6 +112,10 @@ func setup_dispensers(dispensers: Array[DispenserUnit]) -> void:
 
 func _process(delta: float) -> void:
 	if not _is_cooking:
+		return
+
+	# На этапе запекания и спуска платформа ОСТАНОВЛЕНА, вал и ингредиенты не крутятся!
+	if _is_baking:
 		return
 
 	# Анимация вращения вала по часовой стрелке
@@ -160,11 +138,6 @@ func _process(delta: float) -> void:
 		item.sprite.scale.x = item.base_scale
 		item.sprite.scale.y = item.base_scale * (0.60 + sin(a) * 0.05)
 		item.sprite.z_index = 20 + int(py)
-
-	if _is_baking:
-		_cook_time_elapsed += delta
-		var heat_pulse := 0.65 + 0.15 * sin(_cook_time_elapsed * 5.0)
-		_baking_heat_overlay.modulate.a = clampf(heat_pulse, 0.0, 0.85)
 
 
 func start_cooking(order: Order) -> void:
@@ -222,9 +195,11 @@ func _cook_carbonara() -> void:
 		"res://assets/textures/ingredients/carbonara/carbonara_cheese3.png",
 		"res://assets/textures/ingredients/carbonara/carbonara_cheese.png",
 		"res://assets/textures/ingredients/carbonara/carbonara_cheese2.png",
-		"res://assets/textures/ingredients/carbonara/carbonara_cheese3.png"
+		"res://assets/textures/ingredients/carbonara/carbonara_cheese3.png",
+		"res://assets/textures/ingredients/carbonara/carbonara_cheese.png",
+		"res://assets/textures/ingredients/carbonara/carbonara_cheese2.png"
 	]
-	await _drop_batch(0, cheese_paths, 2.8, "fan_center", 0.48)
+	await _drop_batch(0, cheese_paths, 2.8, "sauce_spiral", 0.50)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Мясо", 1)
@@ -233,7 +208,7 @@ func _cook_carbonara() -> void:
 		for i in range(1, 7):
 			var suffix := "" if i == 1 else str(i)
 			meat_paths.append("res://assets/textures/ingredients/carbonara/carbonara_meat%s.png" % suffix)
-	await _drop_batch(1, meat_paths, 2.8, "circle", 0.44)
+	await _drop_batch(1, meat_paths, 2.8, "bacon_ring", 0.44)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Лук", 2)
@@ -242,15 +217,16 @@ func _cook_carbonara() -> void:
 		for i in range(1, 5):
 			var suffix := "" if i == 1 else str(i)
 			onion_paths.append("res://assets/textures/ingredients/carbonara/carbonara_onion%s.png" % suffix)
-	await _drop_batch(2, onion_paths, 2.8, "scatter_mid", 0.38)
+	await _drop_batch(2, onion_paths, 2.8, "onion_rings", 0.38)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Сырная крошка", 3)
 	var part_paths: Array = []
 	for r in range(3):
-		for i in range(1, 6):
-			part_paths.append("res://assets/textures/ingredients/carbonara/carbonara_cheese_part%d.png" % i)
-	await _drop_batch(3, part_paths, 2.8, "scatter_wide", 0.34)
+		for i in range(1, 7):
+			var idx := ((i - 1) % 5) + 1
+			part_paths.append("res://assets/textures/ingredients/carbonara/carbonara_cheese_part%d.png" % idx)
+	await _drop_batch(3, part_paths, 2.8, "cheese_layer", 0.34)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Зелень", 0)
@@ -259,7 +235,7 @@ func _cook_carbonara() -> void:
 		for i in range(1, 5):
 			var suffix := "" if i == 1 else str(i)
 			herb_paths.append("res://assets/textures/ingredients/carbonara/carbonara_herbs%s.png" % suffix)
-	await _drop_batch_dual(0, 1, herb_paths, 2.8, "rain", 0.38)
+	await _drop_batch_dual(0, 1, herb_paths, 2.8, "herbs_top", 0.40)
 
 
 func _cook_chicken_bomboni() -> void:
@@ -270,35 +246,39 @@ func _cook_chicken_bomboni() -> void:
 		"res://assets/textures/ingredients/chickenbomb/chicken_bomboni_sauce.png",
 		"res://assets/textures/ingredients/chickenbomb/chicken_bomboni_sauce2.png",
 		"res://assets/textures/ingredients/chickenbomb/chicken_bomboni_sauce.png",
+		"res://assets/textures/ingredients/chickenbomb/chicken_bomboni_sauce2.png",
+		"res://assets/textures/ingredients/chickenbomb/chicken_bomboni_sauce.png",
 		"res://assets/textures/ingredients/chickenbomb/chicken_bomboni_sauce2.png"
 	]
-	await _drop_batch(0, sauce_paths, 2.8, "center_spot", 0.52)
+	await _drop_batch(0, sauce_paths, 2.8, "sauce_spiral", 0.52)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Лук", 1)
 	var onion_paths: Array = []
-	for r in range(3):
-		for i in range(1, 4):
+	for r in range(2):
+		for i in range(1, 5):
 			var suffix := "" if i == 1 else str(i)
-			onion_paths.append("res://assets/textures/ingredients/chickenbomb/chicken_bomboni_onion%s.png" % suffix)
-	await _drop_batch(1, onion_paths, 2.8, "scatter_mid", 0.38)
+			onion_paths.append("res://assets/textures/ingredients/carbonara/carbonara_onion%s.png" % suffix)
+	await _drop_batch(1, onion_paths, 2.8, "onion_rings", 0.38)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Перец", 2)
 	var pepper_paths: Array = []
 	for r in range(2):
-		for i in range(1, 9):
-			var suffix := "" if i == 1 else str(i)
+		for i in range(1, 10):
+			var idx := ((i - 1) % 8) + 1
+			var suffix := "" if idx == 1 else str(idx)
 			pepper_paths.append("res://assets/textures/ingredients/chickenbomb/chicken_bomboni_pepper%s.png" % suffix)
-	await _drop_batch(2, pepper_paths, 3.4, "burst_all", 0.32)
+	await _drop_batch(2, pepper_paths, 3.4, "pepper_scatter", 0.32)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Куриные наггетсы", 3)
 	var nugget_paths: Array = []
 	for r in range(2):
-		for i in range(1, 6):
-			nugget_paths.append("res://assets/textures/ingredients/chickenbomb/chicken_bomboni_nugget%d.png" % i)
-	await _drop_batch(3, nugget_paths, 5.0, "circle_bounce", 0.45)
+		for i in range(1, 7):
+			var idx := ((i - 1) % 5) + 1
+			nugget_paths.append("res://assets/textures/ingredients/chickenbomb/chicken_bomboni_nugget%d.png" % idx)
+	await _drop_batch(3, nugget_paths, 5.0, "chicken_pieces", 0.45)
 
 
 
@@ -311,30 +291,29 @@ func _cook_margarita() -> void:
 		"res://assets/textures/ingredients/margarita/margarita_sauce3.png",
 		"res://assets/textures/ingredients/margarita/margarita_sauce.png",
 		"res://assets/textures/ingredients/margarita/margarita_sauce2.png",
-		"res://assets/textures/ingredients/margarita/margarita_sauce3.png"
+		"res://assets/textures/ingredients/margarita/margarita_sauce3.png",
+		"res://assets/textures/ingredients/margarita/margarita_sauce.png",
+		"res://assets/textures/ingredients/margarita/margarita_sauce2.png"
 	]
-	await _drop_batch(0, sauce_paths, 3.0, "fan_center", 0.52)
+	await _drop_batch(0, sauce_paths, 3.0, "sauce_spiral", 0.52)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Сыр Моцарелла", 1)
-	var cheese_paths := [
-		"res://assets/textures/ingredients/margarita/margarita_cheese.png",
-		"res://assets/textures/ingredients/margarita/margarita_cheese2.png",
-		"res://assets/textures/ingredients/margarita/margarita_cheese.png",
-		"res://assets/textures/ingredients/margarita/margarita_cheese2.png",
-		"res://assets/textures/ingredients/margarita/margarita_cheese.png",
-		"res://assets/textures/ingredients/margarita/margarita_cheese2.png"
-	]
-	await _drop_batch(1, cheese_paths, 3.0, "center_spot", 0.46)
+	var cheese_paths: Array = []
+	for r in range(4):
+		cheese_paths.append("res://assets/textures/ingredients/margarita/margarita_cheese.png")
+		cheese_paths.append("res://assets/textures/ingredients/margarita/margarita_cheese2.png")
+	await _drop_batch(1, cheese_paths, 3.0, "margarita_cheese", 0.46)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Оливковое масло", 2)
 	var oil_paths: Array = []
 	for r in range(2):
-		for i in range(1, 5):
-			var suffix := "" if i == 1 else str(i)
+		for i in range(1, 6):
+			var idx := ((i - 1) % 4) + 1
+			var suffix := "" if idx == 1 else str(idx)
 			oil_paths.append("res://assets/textures/ingredients/margarita/margarita_oil%s.png" % suffix)
-	await _drop_batch(2, oil_paths, 4.0, "scatter_wide", 0.36)
+	await _drop_batch(2, oil_paths, 4.0, "scatter_mid", 0.36)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Базилик", 3)
@@ -343,7 +322,7 @@ func _cook_margarita() -> void:
 		for i in range(1, 5):
 			var suffix := "" if i == 1 else str(i)
 			bazilik_paths.append("res://assets/textures/ingredients/margarita/margarita_bazilik%s.png" % suffix)
-	await _drop_batch(3, bazilik_paths, 4.0, "spin_leaf", 0.40)
+	await _drop_batch(3, bazilik_paths, 4.0, "herbs_top", 0.42)
 
 
 func _cook_pepperoni() -> void:
@@ -354,17 +333,20 @@ func _cook_pepperoni() -> void:
 		"res://assets/textures/ingredients/pepperoni/margarita_sauce3.png",
 		"res://assets/textures/ingredients/pepperoni/margarita_sauce.png",
 		"res://assets/textures/ingredients/pepperoni/margarita_sauce2.png",
-		"res://assets/textures/ingredients/pepperoni/margarita_sauce3.png"
+		"res://assets/textures/ingredients/pepperoni/margarita_sauce3.png",
+		"res://assets/textures/ingredients/pepperoni/margarita_sauce.png",
+		"res://assets/textures/ingredients/pepperoni/margarita_sauce2.png"
 	]
-	await _drop_batch(0, sauce_paths, 2.5, "fan_center", 0.50)
+	await _drop_batch(0, sauce_paths, 2.5, "sauce_spiral", 0.50)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Сырная основа", 1)
 	var cheese_paths: Array = []
-	for r in range(2):
-		for i in range(1, 6):
-			cheese_paths.append("res://assets/textures/ingredients/pepperoni/carbonara_cheese_part%d.png" % i)
-	await _drop_batch(1, cheese_paths, 2.5, "scatter_wide", 0.36)
+	for r in range(3):
+		for i in range(1, 7):
+			var idx := ((i - 1) % 5) + 1
+			cheese_paths.append("res://assets/textures/ingredients/pepperoni/carbonara_cheese_part%d.png" % idx)
+	await _drop_batch(1, cheese_paths, 2.5, "cheese_layer", 0.36)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Лук", 2)
@@ -374,7 +356,7 @@ func _cook_pepperoni() -> void:
 		onion_paths.append("res://assets/textures/ingredients/pepperoni/carbonara_onion2.png")
 		onion_paths.append("res://assets/textures/ingredients/pepperoni/carbonara_onion3.png")
 		onion_paths.append("res://assets/textures/ingredients/pepperoni/carbonara_onion4.png")
-	await _drop_batch(2, onion_paths, 2.5, "scatter_mid", 0.38)
+	await _drop_batch(2, onion_paths, 2.5, "onion_rings", 0.38)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Пряный перец", 3)
@@ -386,45 +368,63 @@ func _cook_pepperoni() -> void:
 		for i in range(1, 4):
 			var suffix := "" if i == 1 else str(i)
 			pepper_paths.append("res://assets/textures/ingredients/pepperoni/chicken_bomboni_pepper%s.png" % suffix)
-	await _drop_batch(3, pepper_paths, 3.0, "burst_all", 0.32)
+	await _drop_batch(3, pepper_paths, 3.0, "pepper_scatter", 0.32)
 	if not _is_cooking or _skip_layers_requested: return
 
 	cooking_layer_started.emit("Пепперони", 0)
 	var meat_paths: Array = []
-	# 11 кругляшей пепперони (1 в центре, 4 внутренний круг, 6 внешний круг)
-	for i in range(1, 6):
-		meat_paths.append("res://assets/textures/ingredients/pepperoni/pepperoni_meat%d.png" % i)
-	for i in range(1, 7):
+	# 14 кругляшей пепперони: 1 по центру + 5 внутренний круг + 8 внешний круг
+	for i in range(1, 15):
 		var idx := ((i - 1) % 5) + 1
 		meat_paths.append("res://assets/textures/ingredients/pepperoni/pepperoni_meat%d.png" % idx)
-	await _drop_batch_dual(0, 3, meat_paths, 3.5, "circle_bounce", 0.46)
+	await _drop_batch_dual(0, 3, meat_paths, 3.5, "pepperoni_rings", 0.46)
 
 
 func _start_baking_phase() -> void:
 	_is_baking = true
 	baking_started.emit()
-	print("[PizzaCooker] 🔥 ЗАПЕКАНИЕ: ТЭНы активированы!")
+	print("[PizzaCooker] 🔥 ЗАПЕКАНИЕ: Платформа остановлена! Плавное вплавление ингредиентов...")
+
+	# 1. ОСТАНАВЛИВАЕМ ВАЛ ровно на кадре 0 (stove_platform_1.png).
+	# Теперь текстура вала пиксель-в-пиксель совпадает с готовой пиццей!
+	_cur_frame = 0
+	if _platform_frames.size() > 0:
+		_platform_rect.texture = _platform_frames[0]
 
 	for d in _dispensers:
 		d.set_dispenser_state(DispenserUnit.State.PREPARED)
 
-	# Накладываем текстуру готовой пиццы и запускаем мягкий переход
+	# 2. Шейдерная трансформация пиццы (огненная волна запекания) + пышность теста
 	var comp_tex: Texture2D = _completed_textures.get(_current_pizza_name, _completed_textures.get("Пепперони", null))
 	if comp_tex and _completed_rect:
 		_completed_rect.texture = comp_tex
-		var tw_fade := create_tween()
-		_active_tweens.append(tw_fade)
-		tw_fade.tween_property(_completed_rect, "modulate:a", 1.0, 3.0).set_trans(Tween.TRANS_SINE)
+		_completed_rect.modulate = Color.WHITE
+		if _bake_material:
+			_bake_material.set_shader_parameter("progress", 0.0)
+
+		var tw_dissolve := create_tween()
+		_active_tweens.append(tw_dissolve)
+		tw_dissolve.set_parallel(true)
+
+		# Огненная волна запекания от центра пиццы к краям (1.3 сек)
+		if _bake_material:
+			tw_dissolve.tween_method(
+				func(v: float): _bake_material.set_shader_parameter("progress", v),
+				0.0, 1.0, 1.30
+			).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+		else:
+			tw_dissolve.tween_property(_completed_rect, "modulate:a", 1.0, 0.8).set_trans(Tween.TRANS_QUAD)
+
+		# Все сырые ингредиенты растворяются волной под жаром
 		for item in _landed_items:
 			if is_instance_valid(item.sprite):
-				tw_fade.parallel().tween_property(item.sprite, "modulate:a", 0.0, 2.6)
+				tw_dissolve.tween_property(item.sprite, "modulate", Color(1.35, 1.15, 0.9, 0.0), 0.95).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 
-	if _baking_heat_overlay:
-		var tw_heat := create_tween()
-		_active_tweens.append(tw_heat)
-		tw_heat.tween_property(_baking_heat_overlay, "modulate:a", 0.70, 0.8)
-
-	_spawn_steam_particles()
+		# Легкое "дыхание" теста: дрожжевое тесто поднимается от жара (scale +2.5%) и оседает
+		tw_dissolve.tween_property(_platform_rect, "scale", Vector2(PLATFORM_SCALE * 1.025, PLATFORM_SCALE * 1.025), 0.65).set_trans(Tween.TRANS_SINE)
+		tw_dissolve.tween_property(_completed_rect, "scale", Vector2(PLATFORM_SCALE * 1.025, PLATFORM_SCALE * 1.025), 0.65).set_trans(Tween.TRANS_SINE)
+		tw_dissolve.chain().tween_property(_platform_rect, "scale", Vector2(PLATFORM_SCALE, PLATFORM_SCALE), 0.65).set_trans(Tween.TRANS_SINE)
+		tw_dissolve.parallel().tween_property(_completed_rect, "scale", Vector2(PLATFORM_SCALE, PLATFORM_SCALE), 0.65).set_trans(Tween.TRANS_SINE)
 
 	var bake_timer := 4.0
 	while bake_timer > 0.0 and _is_cooking and not _skip_baking_requested:
@@ -434,15 +434,10 @@ func _start_baking_phase() -> void:
 	if _skip_baking_requested or not _is_cooking:
 		return
 
-	if _baking_heat_overlay:
-		var tw_cool := create_tween()
-		tw_cool.tween_property(_baking_heat_overlay, "modulate:a", 0.0, 0.6)
-		_active_tweens.append(tw_cool)
-
 	_is_baking = false
-	print("[PizzaCooker] Запекание завершено! ⬇️ Спуск платформы под печь к выходу для упаковки...")
+	print("[PizzaCooker] Запекание завершено! ⬇️ Остановленная платформа спускается под печь...")
 
-	# Очищаем отдельные кусочки, так как готовая текстура уже полностью проявилась
+	# Очищаем отдельные кусочки, так как пицца уже запечена
 	for item in _landed_items:
 		if is_instance_valid(item.sprite):
 			item.sprite.queue_free()
@@ -451,7 +446,7 @@ func _start_baking_phase() -> void:
 	if not _is_cooking or _skip_baking_requested:
 		return
 
-	# Плавный спуск платформы с готовой пиццей вниз под печь
+	# Плавный спуск ОСТАНОВЛЕННОЙ платформы с готовой пиццей вниз под печь
 	var tw_exit := create_tween()
 	_active_tweens.append(tw_exit)
 	tw_exit.set_parallel(true)
@@ -459,25 +454,6 @@ func _start_baking_phase() -> void:
 	tw_exit.tween_property(_completed_rect, "position:y", PLATFORM_EXIT_Y, 2.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	await tw_exit.finished
 	print("[PizzaCooker] Платформа спущена под печь!")
-
-
-func _spawn_steam_particles() -> void:
-	for i in range(12):
-		if not _is_cooking or not _is_baking: break
-		var steam_dot := ColorRect.new()
-		steam_dot.size = Vector2(randf_range(8, 16), randf_range(8, 16))
-		steam_dot.color = Color(1.0, 1.0, 1.0, 0.28)
-		steam_dot.position = ELLIPSE_CENTER + Vector2(randf_range(-120, 120), randf_range(-40, 40))
-		_steam_container.add_child(steam_dot)
-
-		var tw := create_tween()
-		tw.tween_property(steam_dot, "position:y", steam_dot.position.y - randf_range(60, 120), 1.8).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tw.parallel().tween_property(steam_dot, "color:a", 0.0, 1.8)
-		tw.parallel().tween_property(steam_dot, "scale", Vector2(2.5, 2.5), 1.8)
-		tw.tween_callback(steam_dot.queue_free)
-		_active_tweens.append(tw)
-
-		await get_tree().create_timer(randf_range(0.3, 0.45)).timeout
 
 
 func _drop_batch(disp_idx: int, tex_paths: Array, total_time: float, pattern: String, item_scale: float) -> void:
@@ -597,56 +573,85 @@ func _calculate_pattern_polar(pattern: String, idx: int, total: int) -> Vector2:
 	var angle := 0.0
 	var r := 0.0
 	match pattern:
-		"fan_center":
-			# Веер соуса вокруг центра
+		"sauce_spiral":
+			# Соус наносится спиралью от центра к краям по вращающемуся диску
+			if idx == 0:
+				angle = 0.0
+				r = randf_range(0.0, 0.06)
+			else:
+				var t := float(idx) / float(maxi(total - 1, 1))
+				r = lerpf(0.14, 0.52, t)
+				angle = float(idx) * 1.95 + randf_range(-0.08, 0.08)
+
+		"cheese_layer":
+			# Сыр равномерно покрывает всю пиццу по 3 концентрическим кольцам
+			var ring := idx % 3
+			match ring:
+				0: r = randf_range(0.16, 0.34)
+				1: r = randf_range(0.36, 0.54)
+				2: r = randf_range(0.56, 0.72)
 			angle = (float(idx) / float(maxi(total, 1))) * TAU + randf_range(-0.15, 0.15)
-			r = randf_range(0.12, 0.32)
-		"center_spot":
-			# Пятно соуса в центре
+
+		"pepperoni_rings":
+			# Пепперони: 1 по центру + 5 внутренний круг + 8 внешний круг
 			if idx == 0:
 				angle = 0.0
-				r = randf_range(0.0, 0.10)
+				r = randf_range(0.0, 0.05)
+			elif idx <= 5:
+				angle = (float(idx - 1) / 5.0) * TAU + randf_range(-0.06, 0.06)
+				r = randf_range(0.36, 0.44)
 			else:
-				angle = (float(idx) / float(maxi(total, 1))) * TAU
-				r = randf_range(0.20, 0.35)
-		"circle":
-			# Мясо по ровному кругу
-			angle = (float(idx) / float(maxi(total, 1))) * TAU + randf_range(-0.08, 0.08)
-			r = randf_range(0.52, 0.65)
-		"circle_bounce":
-			# Пепперони/наггетсы: 1 в центре + внутреннее кольцо (4 шт) + внешнее кольцо (6 шт)
+				angle = (float(idx - 6) / float(maxi(total - 6, 1))) * TAU + 0.32 + randf_range(-0.06, 0.06)
+				r = randf_range(0.63, 0.73)
+
+		"margarita_cheese":
+			# Моцарелла: 1 в центре + 7 ровным венком вокруг
 			if idx == 0:
 				angle = 0.0
-				r = randf_range(0.0, 0.08)
+				r = randf_range(0.0, 0.05)
+			else:
+				angle = (float(idx - 1) / float(maxi(total - 1, 1))) * TAU + randf_range(-0.08, 0.08)
+				r = randf_range(0.44, 0.54)
+
+		"bacon_ring":
+			# Бекон: 4 во внутреннем кольце + 8 во внешнем кольце
+			if idx < 4:
+				angle = (float(idx) / 4.0) * TAU + randf_range(-0.1, 0.1)
+				r = randf_range(0.34, 0.45)
+			else:
+				angle = (float(idx - 4) / float(maxi(total - 4, 1))) * TAU + 0.35 + randf_range(-0.1, 0.1)
+				r = randf_range(0.58, 0.70)
+
+		"chicken_pieces":
+			# Курица/наггетсы: 1 в центре + 4 внутренний круг + 7 внешний круг
+			if idx == 0:
+				angle = 0.0
+				r = randf_range(0.0, 0.05)
 			elif idx <= 4:
-				angle = (float(idx - 1) / 4.0) * TAU + randf_range(-0.1, 0.1)
-				r = randf_range(0.38, 0.50)
+				angle = (float(idx - 1) / 4.0) * TAU + randf_range(-0.08, 0.08)
+				r = randf_range(0.35, 0.46)
 			else:
-				angle = (float(idx - 5) / float(maxi(total - 5, 1))) * TAU + 0.35 + randf_range(-0.1, 0.1)
-				r = randf_range(0.66, 0.82)
-		"scatter_mid":
-			# Кольца лука
-			angle = (float(idx) / float(maxi(total, 1))) * TAU + randf_range(-0.3, 0.3)
-			r = randf_range(0.30, 0.65)
-		"scatter_wide":
-			# Сырная крошка / сыр по всей площади
-			angle = randf_range(0.0, TAU)
-			r = randf_range(0.15, 0.82)
-		"burst_all":
-			# Перец: россыпь по всей площади
-			angle = (float(idx) / float(maxi(total, 1))) * TAU + randf_range(-0.25, 0.25)
-			r = randf_range(0.18, 0.84)
-		"rain":
-			# Зелень сверху
+				angle = (float(idx - 5) / float(maxi(total - 5, 1))) * TAU + 0.30 + randf_range(-0.08, 0.08)
+				r = randf_range(0.60, 0.72)
+
+		"onion_rings":
+			# Кольца лука: венок по среднему радиусу
 			angle = (float(idx) / float(maxi(total, 1))) * TAU + randf_range(-0.2, 0.2)
-			r = randf_range(0.25, 0.75)
-		"spin_leaf":
-			# Листики базилика
-			angle = (float(idx) / float(maxi(total, 1))) * TAU + 0.35 + randf_range(-0.1, 0.1)
-			r = randf_range(0.42, 0.68)
+			r = randf_range(0.32, 0.60)
+
+		"pepper_scatter":
+			# Болгарский перец: разноцветная россыпь по всей пицце
+			angle = (float(idx) / float(maxi(total, 1))) * TAU + randf_range(-0.25, 0.25)
+			r = randf_range(0.20, 0.72)
+
+		"herbs_top":
+			# Листики базилика и зелени: сверху поверх начинки
+			angle = (float(idx) / float(maxi(total, 1))) * TAU + 0.25 + randf_range(-0.12, 0.12)
+			r = randf_range(0.36, 0.64)
+
 		_:
 			angle = randf_range(0.0, TAU)
-			r = randf_range(0.20, 0.70)
+			r = randf_range(0.20, 0.68)
 	return Vector2(r, angle)
 
 
@@ -676,16 +681,18 @@ func skip_to_finish() -> void:
 	var comp_tex: Texture2D = _completed_textures.get(_current_pizza_name, _completed_textures.get("Пепперони", null))
 	if comp_tex and _completed_rect:
 		_completed_rect.texture = comp_tex
-		_completed_rect.modulate.a = 1.0
+		_completed_rect.modulate = Color.WHITE
+		if _bake_material:
+			_bake_material.set_shader_parameter("progress", 1.0)
 	for item in _landed_items:
 		if is_instance_valid(item.sprite):
 			item.sprite.queue_free()
 	_landed_items.clear()
-	if _baking_heat_overlay:
-		_baking_heat_overlay.modulate.a = 0.0
 	if _platform_rect:
+		_platform_rect.scale = Vector2(PLATFORM_SCALE, PLATFORM_SCALE)
 		_platform_rect.position.y = PLATFORM_EXIT_Y
 	if _completed_rect:
+		_completed_rect.scale = Vector2(PLATFORM_SCALE, PLATFORM_SCALE)
 		_completed_rect.position.y = PLATFORM_EXIT_Y
 	_is_baking = false
 	cooking_completed.emit()
@@ -707,15 +714,14 @@ func _cleanup() -> void:
 		if is_instance_valid(item.sprite):
 			item.sprite.queue_free()
 	_landed_items.clear()
-	if _steam_container:
-		for child in _steam_container.get_children():
-			child.queue_free()
-	if _baking_heat_overlay:
-		_baking_heat_overlay.modulate.a = 0.0
+	if _bake_material:
+		_bake_material.set_shader_parameter("progress", 0.0)
 	if _platform_rect:
+		_platform_rect.scale = Vector2(PLATFORM_SCALE, PLATFORM_SCALE)
 		_platform_rect.position = Vector2(PLATFORM_X, PLATFORM_START_Y)
 	if _completed_rect:
+		_completed_rect.scale = Vector2(PLATFORM_SCALE, PLATFORM_SCALE)
 		_completed_rect.position = Vector2(PLATFORM_X, PLATFORM_START_Y)
-		_completed_rect.modulate.a = 0.0
+		_completed_rect.modulate = Color.WHITE
 	for d in _dispensers:
 		d.set_dispenser_state(DispenserUnit.State.PREPARED)
