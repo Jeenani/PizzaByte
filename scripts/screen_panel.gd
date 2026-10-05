@@ -400,6 +400,8 @@ func _build_payment() -> void:
 	_promo_input.add_theme_color_override("font_color", Color.WHITE)
 	_promo_input.add_theme_color_override("font_placeholder_color", Color("#586a88"))
 	promo_row.add_child(_promo_input)
+	_promo_input.text_submitted.connect(func(_t): _on_promo_apply_pressed())
+
 
 	var apply_btn := Button.new()
 	apply_btn.text = "Применить"

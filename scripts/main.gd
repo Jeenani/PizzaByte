@@ -80,6 +80,12 @@ var _cook_indicator_time: float = 0.0
 
 
 func _ready() -> void:
+	# Установить иконку окна приложения
+	var app_icon := Image.load_from_file("res://app_ico.png")
+	if app_icon:
+		DisplayServer.set_icon(app_icon)
+
+
 	_game_data = get_node_or_null("/root/GameData")
 	# Загрузить текстуры камеры печи
 	_cam_off = load("res://assets/textures/machine/camera_pizzing_off.png")

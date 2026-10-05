@@ -26,30 +26,44 @@ const BGM_BASE_VOLUME := -14.0 # Приглушенно, но отчетливо
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_setup_audio_buses()
 	_init_players()
 	_load_sounds()
 	start_bgm()
+
+
+func _setup_audio_buses() -> void:
+	if AudioServer.get_bus_index("Music") == -1:
+		AudioServer.add_bus()
+		var idx := AudioServer.get_bus_count() - 1
+		AudioServer.set_bus_name(idx, "Music")
+		AudioServer.set_bus_send(idx, "Master")
+	if AudioServer.get_bus_index("SFX") == -1:
+		AudioServer.add_bus()
+		var idx := AudioServer.get_bus_count() - 1
+		AudioServer.set_bus_name(idx, "SFX")
+		AudioServer.set_bus_send(idx, "Master")
 
 
 func _init_players() -> void:
 	# Фоновая музыка
 	_bgm_player = AudioStreamPlayer.new()
 	_bgm_player.name = "BGMPlayer"
-	_bgm_player.bus = "Master"
+	_bgm_player.bus = "Music"
 	_bgm_player.volume_db = -80.0
 	add_child(_bgm_player)
 
 	# Музыка наложения ингредиентов (Мелстрой)
 	_cooking_player = AudioStreamPlayer.new()
 	_cooking_player.name = "CookingPlayer"
-	_cooking_player.bus = "Master"
+	_cooking_player.bus = "Music"
 	_cooking_player.volume_db = -4.0
 	add_child(_cooking_player)
 
 	# Звук запекания в печи
 	_oven_player = AudioStreamPlayer.new()
 	_oven_player.name = "OvenPlayer"
-	_oven_player.bus = "Master"
+	_oven_player.bus = "SFX"
 	_oven_player.volume_db = -2.0
 	add_child(_oven_player)
 
@@ -57,7 +71,7 @@ func _init_players() -> void:
 	for i in range(SFX_POOL_SIZE):
 		var p := AudioStreamPlayer.new()
 		p.name = "SFX_%d" % i
-		p.bus = "Master"
+		p.bus = "SFX"
 		add_child(p)
 		_sfx_players.append(p)
 

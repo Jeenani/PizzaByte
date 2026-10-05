@@ -13,13 +13,16 @@ config_version=5
 config/name="PizzaMarket"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
-config/icon="res://icon.svg"
+boot_splash/bg_color=Color(0.004, 0.004, 0.004, 1)
+boot_splash/image="res://assets/textures/background/window_startup.png"
+config/icon="res://app_ico.png"
+config/windows_native_icon="res://app_ico.ico"
 
 [autoload]
 
 GameData="*res://scripts/autoload/game_data.gd"
-_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 AudioManager="*res://scripts/managers/audio_manager.gd"
+_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 
 [display]
 
