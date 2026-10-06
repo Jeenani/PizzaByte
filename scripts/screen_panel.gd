@@ -79,6 +79,11 @@ var _pizza_base_scale := Vector2.ONE
 var _pizza_tween: Tween
 var _is_switching_pizza := false
 var _anim_time: float = 0.0
+var _size_preview_mult: float = 1.0
+var _target_size_preview_mult: float = 1.0
+var _dough_preview_aspect := Vector2.ONE
+var _target_dough_preview_aspect := Vector2.ONE
+
 
 var _pname: Label
 var _pprice: Label
@@ -242,8 +247,13 @@ func _build_size() -> void:
 		btn.add_child(lb)
 
 	_sg.select_quiet(1)
+	_target_size_preview_mult = 1.00
 	_sg.option_selected.connect(func(i):
 		AudioManager.play_click_dizzy()
+		match i:
+			0: _target_size_preview_mult = 0.82 # Маленькая
+			1: _target_size_preview_mult = 1.00 # Средняя
+			2: _target_size_preview_mult = 1.18 # Большая
 		size_changed.emit(i)
 		if i < _size_icons.size():
 			_pop_icon(_size_icons[i])
@@ -272,8 +282,11 @@ func _build_dough() -> void:
 		var lb := _lbl(_dlbl[i], 10, Color.WHITE, Vector2(0, 66), Vector2(bw, 50))
 		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lb.z_index = 1; btn.add_child(lb)
 	_dg.select_quiet(0)
+	_target_dough_preview_aspect = Vector2(1.0, 1.0)
 	_dg.option_selected.connect(func(i):
 		AudioManager.play_click_dizzy()
+		var h_idx := _hg.sel_idx if is_instance_valid(_hg) else 0
+		_update_dough_aspect(i, h_idx)
 		dough_changed.emit(i)
 		if i < _dough_icons.size():
 			_pop_icon(_dough_icons[i])
@@ -313,10 +326,23 @@ func _build_height() -> void:
 	_hg.select_quiet(0)
 	_hg.option_selected.connect(func(i):
 		AudioManager.play_click_dizzy()
+		var d_idx := _dg.sel_idx if is_instance_valid(_dg) else 0
+		_update_dough_aspect(d_idx, i)
 		height_changed.emit(i == 1)
 		if i < _height_icons.size():
 			_pop_icon(_height_icons[i])
 	)
+
+
+func _update_dough_aspect(dough_idx: int, height_idx: int) -> void:
+	var base_asp := Vector2(1.0, 1.0)
+	match dough_idx:
+		0: base_asp = Vector2(1.0, 1.0)      # Классическое
+		1: base_asp = Vector2(1.0, 0.92)     # Тонкое
+		2: base_asp = Vector2(1.02, 1.08)    # Пышное
+	if height_idx == 1:
+		base_asp.y *= 1.06                    # Высокая
+	_target_dough_preview_aspect = base_asp
 
 class PizzaSliceIcon extends Control:
 	func _init() -> void:
@@ -400,7 +426,7 @@ func _build_payment() -> void:
 	_promo_input.add_theme_color_override("font_color", Color.WHITE)
 	_promo_input.add_theme_color_override("font_placeholder_color", Color("#586a88"))
 	promo_row.add_child(_promo_input)
-	_promo_input.text_submitted.connect(func(_t): _on_promo_apply_pressed())
+	_promo_input.text_submitted.connect(func(_val): _on_promo_apply_pressed())
 
 
 	var apply_btn := Button.new()
@@ -625,11 +651,14 @@ func _lbl(text: String, fs: int, c: Color, pos: Vector2, sz: Vector2) -> Label:
 func _process(delta: float) -> void:
 	_anim_time += delta
 
-	# 1. Живое медитативное покачивание и дыхание пиццы в покое
+	_size_preview_mult = lerpf(_size_preview_mult, _target_size_preview_mult, 10.0 * delta)
+	_dough_preview_aspect = _dough_preview_aspect.lerp(_target_dough_preview_aspect, 10.0 * delta)
+
+	# 1. Живое медитативное покачивание и дыхание пиццы в покое (с учетом выбранного размера и теста)
 	if not _is_switching_pizza and _pspr and sec_pizza and sec_pizza.visible:
 		_pspr.rotation = sin(_anim_time * 1.8) * 0.035
 		var pulse := 1.0 + sin(_anim_time * 2.5) * 0.02
-		_pspr.scale = _pizza_base_scale * pulse
+		_pspr.scale = _pizza_base_scale * _size_preview_mult * _dough_preview_aspect * pulse
 
 	# 2. Подсказывающее легкое покачивание стрелок карусели
 	if _al and _ar_btn and sec_pizza and sec_pizza.visible:

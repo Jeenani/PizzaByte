@@ -81,9 +81,11 @@ var _cook_indicator_time: float = 0.0
 
 func _ready() -> void:
 	# Установить иконку окна приложения
-	var app_icon := Image.load_from_file("res://app_ico.png")
-	if app_icon:
-		DisplayServer.set_icon(app_icon)
+	var app_icon_tex := load("res://app_ico.png") as Texture2D
+	if app_icon_tex:
+		var app_icon := app_icon_tex.get_image()
+		if app_icon:
+			DisplayServer.set_icon(app_icon)
 
 
 	_game_data = get_node_or_null("/root/GameData")

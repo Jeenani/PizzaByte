@@ -33,6 +33,10 @@ func select_quiet(i: int) -> void:
 	_apply()
 
 
+func get_selected_index() -> int:
+	return sel_idx
+
+
 func _on_click(i: int) -> void:
 	select(i)
 
