@@ -21,15 +21,17 @@ const MACHINE_W := BODY_W * MACHINE_SCALE # 919.98
 const MACHINE_H := BODY_H * MACHINE_SCALE # 875.52
 # Центр автомата в мировых координатах (с легким смещением в сторону сенсорного экрана)
 const MACHINE_CENTER := Vector2(130.0 + MACHINE_W * 0.52, 410.0 + MACHINE_H * 0.48)
+const MACHINE_FOCUS_CENTER := Vector2(130.0 + MACHINE_W * 0.54, 410.0 + MACHINE_H * 0.46)
 
 const SCREEN_RECT := Rect2(1044, 220, 432, 924)
 const OVEN_RECT := Rect2(100, 270, 820, 660)
 const DISPENSE_RECT := Rect2(220, 1150, 580, 160)
+const DISPENSE_SIGN_RECT := Rect2(240, 1016, 570, 54)
 const BAR_RECT := Rect2(12, 1320, 640, 120)
 const FURNACE_RECT := Rect2(1330, 1348, 124, 100)
 const LOGO_RECT := Rect2(150, 76, 550, 170)
 
-# Управление камерой (зум: 0.0 = общий вид всего фона, 1.0 = фокус на автомате)
+# Управление камерой (зум: 0.0 = максимальное отдаление фона, 1.0 = полный масштаб автомата во весь экран)
 var _zoom_t: float = 0.0
 var _target_zoom_t: float = 0.0
 const ZOOM_STEP := 0.15
@@ -60,8 +62,10 @@ const ZOOM_STEP := 0.15
 var _game_data: Node
 var _panel: ScreenPanel
 var _neon: NeonSign
+var _dispense_sign: DispenseSign
 var _dispensers: Array[DispenserUnit] = []
 const PizzaCookerScript := preload("res://scripts/components/pizza_cooker.gd")
+const DispenseSignScript := preload("res://scripts/components/dispense_sign.gd")
 var _cooker: Node2D
 var _oven_heat_tween: Tween
 
@@ -225,9 +229,30 @@ func _setup_machine_layout() -> void:
 	)
 	_cooker.baking_started.connect(func():
 		if _panel and machine.current_state == MachineController.State.COOKING:
-			_panel.set_title("🔥 ЗАПЕКАНИЕ (6 сек)")
+			_panel.set_title("🔥 ЗАПЕКАНИЕ (5 сек)")
 		_start_oven_heat()
 	)
+	_cooker.platform_lowering_started.connect(func():
+		print("[Main] ⬇️ Пицца начинает спуск из печи!")
+		_stop_oven_heat()
+		_set_furnace_indicator(_furnace_ind0)
+		if _dispense_sign:
+			_dispense_sign.start_blinking()
+		if _panel and machine.current_state == MachineController.State.COOKING:
+			_panel.set_title("⬇️ ВЫДАЧА ПИЦЦЫ...")
+	)
+	_cooker.cooking_completed.connect(func():
+		print("[Main] ✅ Пицца полностью опустилась под печь -> выдаем коробку!")
+		_on_pizza_fully_cooked()
+	)
+
+	# Неоновое табло над лотком выдачи («ЗАБЕРИ СВОЮ ПИЦЦУ» + мигающие стрелочки ▼)
+	_dispense_sign = DispenseSignScript.new()
+	_dispense_sign.name = "DispenseSign"
+	_dispense_sign.position = DISPENSE_SIGN_RECT.position
+	_dispense_sign.size = DISPENSE_SIGN_RECT.size
+	_dispense_sign.z_index = 500
+	body.add_child(_dispense_sign)
 
 	# Неоновая вывеска на верхней левой плашке
 	_neon = NeonSign.new()
@@ -263,10 +288,10 @@ func _process(delta: float) -> void:
 
 func _calc_zoom_bounds() -> Vector2:
 	var vp := get_viewport().get_visible_rect().size
-	# Отдаление: весь фон 2752x1536 помещается на экране
+	# Отдаление: весь фон 2752x1536 помещается на экране (максимальное отдаление при старте)
 	var z_out := minf(vp.x / BG_W, vp.y / BG_H)
-	# Приближение: автомат занимает ~94% экрана по высоте
-	var z_in := (vp.y * 0.94) / MACHINE_H
+	# Максимальное приближение: автомат занимает ровно 100% высоты экрана с сохранением полного масштаба всего автомата
+	var z_in := (vp.y * 1.0) / MACHINE_H
 	return Vector2(z_out, z_in)
 
 
@@ -382,7 +407,7 @@ func _handle_cooking_skip() -> void:
 		print("[Main] ⏭️ Скип 2/2: Запекание завершено, переходим к выдаче!")
 		_stop_oven_heat()
 		_cooker.skip_to_finish()
-		queue_mgr.skip_cooking()
+		_on_pizza_fully_cooked()
 
 
 # ═══ FSM ═══
@@ -399,12 +424,16 @@ func _update_oven_camera(state: MachineController.State) -> void:
 			_set_camera(_cam_off)
 			_set_furnace_indicator(_furnace_ind0)
 			pizza_box.visible = false
+			if _dispense_sign:
+				_dispense_sign.stop_blinking()
 			_set_dispensers_state(DispenserUnit.State.OFF)
 		MachineController.State.SELECT_MODE, MachineController.State.SELECT_PARAMETERS, \
 		MachineController.State.BUILDING_COMPOSITION, MachineController.State.PROMO_CODE, \
 		MachineController.State.PAYMENT, MachineController.State.QUEUE:
 			_set_camera(_cam_enabled)
 			_set_furnace_indicator(_furnace_ind0)
+			if _dispense_sign:
+				_dispense_sign.stop_blinking()
 			_set_dispensers_state(DispenserUnit.State.PREPARED)
 		MachineController.State.COOKING:
 			_set_camera(_cam_cooking)
@@ -413,6 +442,8 @@ func _update_oven_camera(state: MachineController.State) -> void:
 			_cook_indicator_time = 0.0
 			_set_camera(_cam_completed)
 			_set_furnace_indicator(_furnace_ind0)
+			if _dispense_sign:
+				_dispense_sign.start_blinking()
 			_set_dispensers_state(DispenserUnit.State.PREPARED)
 
 
@@ -438,6 +469,8 @@ func _on_cook_start(order) -> void:
 	_cook_indicator_time = 0.0
 	_set_camera(_cam_cooking)
 	_set_furnace_indicator(_furnace_ind0)
+	if _dispense_sign:
+		_dispense_sign.stop_blinking()
 	machine.force_transition(MachineController.State.COOKING)
 	if _cooker:
 		_cooker.start_cooking(order)
@@ -447,7 +480,9 @@ func _on_cook_progress(progress: float, time_left: float) -> void:
 	cook_progress.value = progress * 100.0
 	if machine.current_state == MachineController.State.COOKING:
 		if _panel:
-			if (_cooker and _cooker.is_in_baking_phase()) or time_left <= 6.0:
+			if _cooker and _cooker.is_lowering():
+				_panel.set_title("⬇️ ВЫДАЧА ПИЦЦЫ...")
+			elif (_cooker and _cooker.is_in_baking_phase()) or time_left <= 6.0:
 				_panel.set_title("🔥 ЗАПЕКАНИЕ: %d сек" % ceil(time_left))
 			else:
 				_panel.set_title("РАСКЛАДКА: %d сек" % ceil(maxf(time_left - 6.0, 1.0)))
@@ -456,12 +491,27 @@ func _on_cook_finish(_order) -> void:
 	cook_progress.value = 100
 	_cook_indicator_time = 0.0
 	_stop_oven_heat()
-	if _cooker:
-		_cooker.stop()
+	_set_furnace_indicator(_furnace_ind0)
+	# Если кукер еще в процессе выпекания или спуска платформы — ждем естественного окончания
+	if _cooker and (_cooker.is_lowering() or _cooker.is_in_baking_phase()):
+		print("[Game] Ждём завершения спуска платформы перед показом коробки...")
+		return
+	_on_pizza_fully_cooked()
+
+
+func _on_pizza_fully_cooked() -> void:
+	cook_progress.value = 100
+	_cook_indicator_time = 0.0
+	_stop_oven_heat()
 	_set_camera(_cam_completed)
 	_set_furnace_indicator(_furnace_ind0)
-	machine.force_transition(MachineController.State.DISPENSING)
+	if machine.current_state in [MachineController.State.COOKING, MachineController.State.DISPENSING]:
+		machine.force_transition(MachineController.State.DISPENSING)
 	_show_pizza_box()
+	if _dispense_sign:
+		_dispense_sign.start_blinking()
+	if queue_mgr and queue_mgr.is_cooking:
+		queue_mgr.complete_cooking()
 	print("[Game] Готовка завершена! Пицца готова.")
 
 
@@ -511,6 +561,8 @@ func _take_pizza() -> void:
 			machine.force_transition(MachineController.State.IDLE)
 		return
 	print("[Game] Игрок забирает пиццу!")
+	if _dispense_sign:
+		_dispense_sign.stop_blinking()
 	AudioManager.play_pickup_random()
 	var tw := create_tween()
 	tw.tween_property(pizza_box, "modulate:a", 0.0, 0.35)

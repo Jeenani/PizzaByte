@@ -62,6 +62,13 @@ func skip_cooking() -> void:
 		_finish_cooking()
 
 
+## Завершить приготовление по сигналу готовности кукера
+func complete_cooking() -> void:
+	if is_cooking and current_cooking:
+		_cook_elapsed = _cook_total
+		_finish_cooking()
+
+
 ## Перемотать приготовление к фазе запекания
 func skip_to_baking() -> void:
 	if is_cooking and current_cooking:

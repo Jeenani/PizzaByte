@@ -7,6 +7,7 @@ extends Node2D
 
 signal cooking_layer_started(layer_name: String, dispenser_idx: int)
 signal baking_started
+signal platform_lowering_started
 signal cooking_completed
 
 const PLATFORM_SCALE := 0.77
@@ -44,6 +45,7 @@ const FRAME_DURATION := 0.12
 
 var _is_cooking := false
 var _is_baking := false
+var _is_lowering := false
 var _skip_layers_requested := false
 var _skip_baking_requested := false
 var _rot_angle := 0.0
@@ -588,7 +590,7 @@ func _start_baking_phase(session_id: int) -> void:
 		if _crust_rim_rect:
 			tw_dissolve.parallel().tween_property(_crust_rim_rect, "scale", base_sc, 2.0).set_trans(Tween.TRANS_SINE)
 
-	var bake_timer := 6.0
+	var bake_timer := 5.0
 	while bake_timer > 0.0 and _is_cooking and not _skip_baking_requested and session_id == _cook_session_id:
 		await get_tree().create_timer(0.2).timeout
 		bake_timer -= 0.2
@@ -610,15 +612,19 @@ func _start_baking_phase(session_id: int) -> void:
 	if not _is_cooking or _skip_baking_requested or session_id != _cook_session_id:
 		return
 
-	# Плавный спуск ОСТАНОВЛЕННОЙ платформы с готовой пиццей вниз под печь (1.5 сек)
+	_is_lowering = true
+	platform_lowering_started.emit()
+
+	# Плавный спуск ОСТАНОВЛЕННОЙ платформы с готовой пиццей вниз под печь (1.4 сек)
 	var tw_exit := create_tween()
 	_active_tweens.append(tw_exit)
 	tw_exit.set_parallel(true)
-	tw_exit.tween_property(_platform_rect, "position:y", PLATFORM_EXIT_Y, 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw_exit.tween_property(_completed_rect, "position:y", PLATFORM_EXIT_Y, 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw_exit.tween_property(_platform_rect, "position:y", PLATFORM_EXIT_Y, 1.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw_exit.tween_property(_completed_rect, "position:y", PLATFORM_EXIT_Y, 1.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	if _crust_rim_rect:
-		tw_exit.tween_property(_crust_rim_rect, "position:y", PLATFORM_EXIT_Y + _current_crust_offset_y, 1.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw_exit.tween_property(_crust_rim_rect, "position:y", PLATFORM_EXIT_Y + _current_crust_offset_y, 1.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	await tw_exit.finished
+	_is_lowering = false
 	print("[PizzaCooker] Платформа спущена под печь!")
 
 
@@ -862,6 +868,10 @@ func is_in_baking_phase() -> bool:
 	return _is_baking or _skip_layers_requested
 
 
+func is_lowering() -> bool:
+	return _is_lowering
+
+
 func skip_to_baking() -> void:
 	if _is_baking or not _is_cooking:
 		return
@@ -916,6 +926,7 @@ func skip_to_finish() -> void:
 		_crust_rim_rect.scale = final_sc
 		_crust_rim_rect.position.y = PLATFORM_EXIT_Y + _current_crust_offset_y
 	_is_baking = false
+	_is_lowering = false
 	cooking_completed.emit()
 
 func stop() -> void:
@@ -927,6 +938,7 @@ func _cleanup() -> void:
 	_cook_session_id += 1
 	_is_cooking = false
 	_is_baking = false
+	_is_lowering = false
 	_skip_layers_requested = false
 	_skip_baking_requested = false
 	AudioManager.stop_cooking_groove()
