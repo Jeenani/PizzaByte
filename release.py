@@ -27,6 +27,22 @@ POSSIBLE_GODOT_PATHS = [
     Path(r"C:\Users\User\Desktop\GodotEngine\Godot_v4.7.2-stable_win64_console.exe"),
     Path(r"C:\Users\User\Desktop\GodotEngine\Godot_v4.7.2-stable_win64.exe"),
 ]
+POSSIBLE_ISCC_PATHS = [
+    Path(r"C:\Program Files\Inno Setup 7\ISCC.exe"),
+    Path(r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe"),
+    Path(r"C:\Program Files\Inno Setup 6\ISCC.exe"),
+]
+
+
+def find_iscc_executable() -> Path | None:
+    for path in POSSIBLE_ISCC_PATHS:
+        if path.exists():
+            return path
+    which = shutil.which("iscc")
+    if which:
+        return Path(which)
+    return None
+
 
 
 def find_godot_executable() -> Path:
@@ -178,6 +194,30 @@ def package_release(version_tag: str) -> Path:
     return archive_path
 
 
+def build_inno_installer(version_str: str) -> Path | None:
+    iscc = find_iscc_executable()
+    if not iscc:
+        print("[!] Inno Setup (ISCC.exe) не найден, сборка инсталлера пропущена.")
+        return None
+    iss_file = PROJECT_ROOT / "installer.iss"
+    if not iss_file.exists():
+        print("[!] installer.iss не найден.")
+        return None
+    print(f"[*] Сборка Inno Setup установщика ({version_str})...")
+    cmd = [str(iscc), f"/DMyAppVersion={version_str}", str(iss_file)]
+    res = subprocess.run(cmd, cwd=PROJECT_ROOT, capture_output=True, text=True)
+    if res.returncode != 0:
+        print(f"[!] Ошибка компиляции Inno Setup (код {res.returncode}):")
+        print(res.stderr or res.stdout)
+        return None
+    installer_path = PROJECT_ROOT / f"PizzaByte_Setup_v{version_str}.exe"
+    if installer_path.exists():
+        size_mb = installer_path.stat().st_size / (1024 * 1024)
+        print(f"[+] Установщик успешно создан: {installer_path.name} ({size_mb:.1f} MB)")
+        return installer_path
+    return None
+
+
 def get_github_token() -> str:
     token = os.environ.get("GITHUB_TOKEN")
     if token:
@@ -227,7 +267,7 @@ def create_and_push_tag(version_tag: str):
 
 
 
-def publish_github_release(version_tag: str, archive_path: Path, draft: bool = False) -> str:
+def publish_github_release(version_tag: str, assets: list[Path], draft: bool = False) -> str:
     token = get_github_token()
     repo_slug = get_repo_slug()
     print(f"[*] Публикация релиза на GitHub ({repo_slug})...")
@@ -243,12 +283,12 @@ def publish_github_release(version_tag: str, archive_path: Path, draft: bool = F
 Официальный установочный билд игры **PizzaByte** (2D симулятор автомата по продаже пиццы).
 
 ### 🚀 Варианты установки и запуска:
-1. **Портативная версия (без установки)**:
-   - Скачайте и распакуйте архив `{archive_path.name}`.
-   - Запустите `PizzaByte.exe`.
-2. **Установка в систему**:
-   - Запустите скрипт `Установить_PizzaByte.bat` внутри папки.
-   - Игра скопируется в программы с автоматическим созданием ярлыков на **Рабочем столе** и в **меню Пуск**!
+1. **💾 Единый установочный файл (рекомендуется)**:
+   - Скачайте **`PizzaByte_Setup_{version_tag}.exe`**.
+   - Запустите мастер установки: он автоматически установит игру, создаст ярлыки на **Рабочем столе** и в **меню Пуск** с официальной иконкой!
+2. **📦 Портативная версия (без установки)**:
+   - Скачайте архив **`PizzaByte_{version_tag}_Windows_x64.zip`**.
+   - Распакуйте в любую папку и запустите `PizzaByte.exe`.
 
 ### 🎮 Основные возможности:
 - Реалистичный процесс приготовления: запекание, динамические ТЭНы, индикатор нагрева печи.
@@ -292,35 +332,40 @@ def publish_github_release(version_tag: str, archive_path: Path, draft: bool = F
             print(f"[+] Релиз создан: {release_data['html_url']}")
 
     upload_url = release_data["upload_url"].split("{")[0]
+    existing_assets = {a["name"]: a["id"] for a in release_data.get("assets", [])}
 
-    for asset in release_data.get("assets", []):
-        if asset["name"] == archive_path.name:
-            print(f"[*] Удаление старого ассета '{asset['name']}'...")
+    for asset_path in assets:
+        if not asset_path.exists():
+            continue
+        if asset_path.name in existing_assets:
+            print(f"[*] Удаление старого ассета '{asset_path.name}'...")
             del_req = urllib.request.Request(
-                f"https://api.github.com/repos/{repo_slug}/releases/assets/{asset['id']}",
+                f"https://api.github.com/repos/{repo_slug}/releases/assets/{existing_assets[asset_path.name]}",
                 headers=headers,
                 method="DELETE",
             )
             with urllib.request.urlopen(del_req):
                 pass
 
-    print(f"[*] Загрузка {archive_path.name} в релиз ({archive_path.stat().st_size / (1024*1024):.1f} MB)...")
-    with open(archive_path, "rb") as f:
-        file_bytes = f.read()
+        size_mb = asset_path.stat().st_size / (1024 * 1024)
+        print(f"[*] Загрузка {asset_path.name} в релиз ({size_mb:.1f} MB)...")
+        with open(asset_path, "rb") as f:
+            file_bytes = f.read()
 
-    upload_headers = {
-        "User-Agent": "PizzaByte-Release-Bot",
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/zip",
-        "Content-Length": str(len(file_bytes)),
-    }
-    url = f"{upload_url}?name={archive_path.name}"
-    upload_req = urllib.request.Request(url, headers=upload_headers, data=file_bytes, method="POST")
+        content_type = "application/zip" if asset_path.suffix.lower() == ".zip" else "application/octet-stream"
+        upload_headers = {
+            "User-Agent": "PizzaByte-Release-Bot",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": content_type,
+            "Content-Length": str(len(file_bytes)),
+        }
+        url = f"{upload_url}?name={asset_path.name}"
+        upload_req = urllib.request.Request(url, headers=upload_headers, data=file_bytes, method="POST")
 
-    with urllib.request.urlopen(upload_req) as resp:
-        asset_info = json.loads(resp.read().decode())
-        print(f"[+] Файл успешно загружен!")
-        print(f"    Прямая ссылка на скачивание: {asset_info['browser_download_url']}")
+        with urllib.request.urlopen(upload_req) as resp:
+            asset_info = json.loads(resp.read().decode())
+            print(f"[+] '{asset_path.name}' успешно загружен!")
+            print(f"    Прямая ссылка: {asset_info['browser_download_url']}")
 
     return release_data["html_url"]
 
@@ -333,20 +378,30 @@ def main():
 
     args = parser.parse_args()
     version_tag = args.version if args.version.startswith("v") else f"v{args.version}"
+    clean_version = version_tag.lstrip("v")
 
     print("====================================================")
     print(f"   Сборка и публикация PizzaByte ({version_tag})")
     print("====================================================")
 
     build_game()
+    installer_path = build_inno_installer(clean_version)
     archive_path = package_release(version_tag)
 
+    assets = []
+    if installer_path and installer_path.exists():
+        assets.append(installer_path)
+    if archive_path and archive_path.exists():
+        assets.append(archive_path)
+
     if args.build_only:
-        print(f"\n[+] Сборка завершена (--build-only): {archive_path.resolve()}")
+        print("\n[+] Сборка завершена (--build-only). Файлы:")
+        for a in assets:
+            print(f"    - {a.resolve()}")
         return
 
     create_and_push_tag(version_tag)
-    release_url = publish_github_release(version_tag, archive_path, draft=args.draft)
+    release_url = publish_github_release(version_tag, assets, draft=args.draft)
 
     print("\n====================================================")
     print("🎉 ВСЕ ЭТАПЫ УСПЕШНО ЗАВЕРШЕНЫ!")
@@ -356,4 +411,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

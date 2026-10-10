@@ -46,3 +46,8 @@ build/
 *.zip
 *.pck
 *.tmp
+*_Setup_*.exe
+__pycache__/
+*.iss.bak
+
+
