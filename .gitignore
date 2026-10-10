@@ -39,3 +39,10 @@ $RECYCLE.BIN/
 .idea/
 *.swp
 *.swo
+
+
+# --- Сборки и архивы ---
+build/
+*.zip
+*.pck
+*.tmp
